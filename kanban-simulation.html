@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kanban flow simulation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #eef0f3;
+    --panel: #ffffff;
+    --ink: #1c2330;
+    --muted: #5d6675;
+    --line: #d5d9e0;
+    --accent: #2456a6;
+    --accent-ink: #ffffff;
+    --card: #fff4b0;
+    --card-line: #e0c85a;
+    --card-amber: #ffd08a;
+    --card-red: #ffb3a7;
+    --full: #c9352b;
+    --c-backlog: #b8bec8;
+    --c-analysis: #6b8fd6;
+    --c-develop: #8f6bd6;
+    --c-test: #e0a23a;
+    --c-done: #4aa36c;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #161a21; --panel: #202631; --ink: #e8ebf0; --muted: #9aa3b2; --line: #343c4a;
+      --accent: #7ea2e6; --accent-ink: #10151d;
+      --card: #5c5322; --card-line: #9c8a2c; --card-amber: #7a5a1e; --card-red: #7d2f27;
+      --full: #ff7a6e; --c-backlog: #5b6472;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #161a21; --panel: #202631; --ink: #e8ebf0; --muted: #9aa3b2; --line: #343c4a;
+    --accent: #7ea2e6; --accent-ink: #10151d;
+    --card: #5c5322; --card-line: #9c8a2c; --card-amber: #7a5a1e; --card-red: #7d2f27;
+    --full: #ff7a6e; --c-backlog: #5b6472;
+  }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  *, *::before, *::after { box-sizing: inherit; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "IBM Plex Sans", "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size: 15px; line-height: 1.45;
+  }
+  header { padding: 22px 24px 8px; max-width: 1240px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; font-weight: 600; margin: 0 0 4px; letter-spacing: -0.01em; }
+  header p { margin: 0; color: var(--muted); max-width: 70ch; }
+
+  .layout {
+    display: grid; grid-template-columns: 280px 1fr; gap: 18px;
+    max-width: 1240px; margin: 0 auto; padding: 12px 24px 40px;
+  }
+  @media (max-width: 860px) { .layout { grid-template-columns: 1fr; padding: 12px 14px 40px; } header { padding: 18px 14px 6px; } }
+
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+  .controls { padding: 16px; align-self: start; position: sticky; top: env(safe-area-inset-top, 0px); }
+  @media (max-width: 860px) { .controls { position: static; } }
+  .controls h2, .chart h2, .principles h2 { font-size: 0.95rem; font-weight: 600; margin: 0 0 10px; }
+  .group { padding: 12px 0; border-top: 1px solid var(--line); }
+  .group:first-of-type { border-top: 0; padding-top: 0; }
+  .presets { display: flex; flex-wrap: wrap; gap: 6px; }
+  button {
+    font: inherit; font-size: 0.9rem; cursor: pointer; border-radius: 6px;
+    border: 1px solid var(--line); background: var(--panel); color: var(--ink); padding: 6px 10px;
+  }
+  button:hover { border-color: var(--accent); }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 500; }
+  .run { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .presets button.active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 500; }
+  .scenario { margin: 10px 0 0; font-size: 0.86rem; display: flex; align-items: center; gap: 8px; }
+  .scenario b { font-weight: 600; }
+  .scenario .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-size: 0.8rem; font-weight: 500; }
+  .scenario .badge.custom { background: var(--line); color: var(--ink); }
+  .boardhead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+  .boardhead h2 { font-size: 0.95rem; font-weight: 600; margin: 0; }
+  .run select { flex: 1; }
+  label.field { display: block; margin: 8px 0 2px; font-size: 0.9rem; }
+  label.field span.val { float: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 100%; accent-color: var(--accent); margin: 0 0 4px; }
+  select { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; }
+  .check { display: flex; align-items: center; gap: 8px; margin: 6px 0; font-size: 0.9rem; }
+  .check input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; }
+  .hint { font-size: 0.8rem; color: var(--muted); margin: 4px 0 0; }
+  .disabled { opacity: 0.45; }
+  .help {
+    display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; margin-left: 6px;
+    border-radius: 50%; border: 1px solid var(--muted); color: var(--muted); font-size: 0.7rem; font-weight: 600;
+    cursor: help; position: relative; vertical-align: middle; flex: none;
+  }
+  .help:hover, .help:focus { border-color: var(--accent); color: var(--accent); outline: none; }
+  .help::after {
+    content: attr(data-tip); position: absolute; left: 0; top: 22px; z-index: 5; width: 230px;
+    background: var(--ink); color: var(--bg); font-size: 0.8rem; font-weight: 400; line-height: 1.35;
+    padding: 8px 10px; border-radius: 6px; box-shadow: 0 4px 14px rgba(0,0,0,.2); white-space: normal;
+    opacity: 0; pointer-events: none; transition: opacity .12s;
+  }
+  .help:hover::after, .help:focus::after { opacity: 1; }
+  label.field { display: flex; align-items: center; }
+  label.field span.val { margin-left: auto; float: none; }
+  h2 .help { font-size: 0.68rem; }
+
+  .stage { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+  .metrics { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+  @media (max-width: 1000px) { .metrics { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 520px) { .metrics { grid-template-columns: repeat(2, 1fr); } }
+  .metric { padding: 12px 14px; }
+  .metric .n { font-size: 1.6rem; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .metric .l { font-size: 0.82rem; color: var(--muted); margin-top: 2px; }
+  .metric .s { font-size: 0.78rem; color: var(--muted); }
+
+  .board { padding: 14px; overflow-x: auto; }
+  .cols { display: grid; grid-template-columns: repeat(5, minmax(120px, 1fr)); gap: 10px; min-width: 640px; }
+  .col { border-radius: 6px; background: var(--bg); border: 1px solid var(--line); min-height: 290px; display: flex; flex-direction: column; transition: border-color .2s; }
+  .col.full { border-color: var(--full); box-shadow: inset 0 0 0 1px var(--full); }
+  .colhead { padding: 8px 10px; border-bottom: 3px solid var(--c); display: flex; justify-content: space-between; align-items: baseline; }
+  .colhead b { font-weight: 600; font-size: 0.92rem; }
+  .colhead .wip { font-size: 0.82rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .col.full .wip { color: var(--full); font-weight: 600; }
+  .cards { padding: 8px; display: flex; flex-wrap: wrap; gap: 5px; align-content: flex-start; }
+  .card {
+    width: 32px; height: 26px; border-radius: 3px; background: var(--card); border: 1px solid var(--card-line);
+    font-size: 0.68rem; display: flex; align-items: center; justify-content: center; font-variant-numeric: tabular-nums;
+    position: relative;
+  }
+  .card.old { background: var(--card-amber); }
+  .card.veryold { background: var(--card-red); }
+  .card.ready::after { content: ""; position: absolute; right: 2px; bottom: 2px; width: 6px; height: 6px; border-radius: 50%; background: var(--c-done); }
+  .card.done { background: transparent; border-color: var(--line); color: var(--muted); }
+  .more { font-size: 0.78rem; color: var(--muted); align-self: center; padding: 0 4px; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 10px; font-size: 0.8rem; color: var(--muted); align-items: center; }
+  .legend .card { width: 18px; height: 14px; display: inline-flex; vertical-align: middle; margin-right: 4px; }
+  .legend .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--c-done); margin-right: 4px; }
+
+  .chart { padding: 14px; }
+  .chart svg { width: 100%; height: auto; display: block; }
+  .clegend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 0.8rem; color: var(--muted); margin-top: 6px; }
+  .clegend i { display: inline-block; width: 12px; height: 12px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+
+  .principles { padding: 16px 18px; }
+  .principles ol { margin: 0; padding-left: 20px; }
+  .principles li { margin-bottom: 8px; max-width: 75ch; }
+  .principles li b { font-weight: 600; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Kanban flow simulation</h1>
+  <p>Work arrives on the left and moves through three stages to Done. Change the settings while it runs and watch what happens to work in progress, cycle time and throughput.</p>
+</header>
+
+<div class="layout">
+  <aside class="panel controls" aria-label="Settings">
+    <div class="group">
+      <h2>Variation<span class="help" tabindex="0" role="note" data-tip="How much item sizes differ from the typical effort. Low means every item is close to average. High means some items are several times larger than others. Applies to items created after you change it.">?</span></h2>
+      <label class="field" for="variation">Spread in item size</label>
+      <select id="variation" style="width:100%">
+        <option value="0.15">Low – items are much the same size</option>
+        <option value="0.45" selected>Medium</option>
+        <option value="0.9">High – sizes vary a lot</option>
+      </select>
+    </div>
+    <div class="group">
+      <h2>Run<span class="help" tabindex="0" role="note" data-tip="Play advances one day at each tick. Step moves one day at a time so you can watch a single change. Reset clears the board and starts again at day 0. Speed only changes how fast days pass, not the results.">?</span></h2>
+      <div class="run">
+        <button id="play" class="primary">Play</button>
+        <button id="step">Step 1 day</button>
+        <button id="reset">Reset</button>
+        <select id="speed" aria-label="Speed">
+          <option value="600">Slow</option>
+          <option value="250" selected>Normal</option>
+          <option value="60">Fast</option>
+        </select>
+      </div>
+      <label class="field" for="runFor">Run for<span class="help" tabindex="0" role="note" data-tip="Continuous runs until you press Pause. A fixed length stops the run at that day so two scenarios can be compared over the same period.">?</span></label>
+      <select id="runFor" style="width:100%">
+        <option value="0" selected>Continuous</option>
+        <option value="90">90 days</option>
+        <option value="180">180 days</option>
+        <option value="270">270 days</option>
+      </select>
+      <p class="hint" id="dayline">Day 0</p>
+    </div>
+
+    <div class="group">
+      <h2>Scenarios<span class="help" tabindex="0" role="note" data-tip="Each button sets every control to a starting point and starts a fresh run. Use them in order: push, then pull, then bottleneck.">?</span></h2>
+      <div class="presets">
+        <button data-preset="push">Push, no limits</button>
+        <button data-preset="pull">Pull with WIP limits</button>
+        <button data-preset="bottleneck">Bottleneck in Test</button>
+      </div>
+      <p class="scenario">Running: <span class="badge custom" id="scen">Custom settings</span></p>
+      <p class="hint">Changing any control switches to custom settings. The scenario buttons reset the run.</p>
+    </div>
+
+    <div class="group">
+      <h2>Demand<span class="help" tabindex="0" role="note" data-tip="Rate at which new items arrive in the backlog. Develop can finish about one item a day with three people, so anything above 1.0 is more than the system can handle.">?</span></h2>
+      <label class="field" for="rate">New items per day <span class="val" id="rate-v">1.0</span></label>
+      <input type="range" id="rate" min="0.25" max="3" step="0.25" value="1">
+    </div>
+
+    <div class="group">
+      <h2>Work in progress<span class="help" tabindex="0" role="note" data-tip="A WIP limit caps how many items a column may hold. When a column is full it stops pulling from the column before it. Off means push: work moves as soon as it is ready.">?</span></h2>
+      <label class="check"><input type="checkbox" id="limitOn"> Limit work in progress</label>
+      <div id="limitWrap" class="disabled">
+        <label class="check"><input type="checkbox" id="sameLimit" checked disabled> Use one limit for every column<span class="help" tabindex="0" role="note" data-tip="Ticked: the single slider applies to Analysis, Develop and Test. Unticked: set a different limit for each column, for example a tight limit at the bottleneck and a small buffer just before it.">?</span></label>
+        <div id="oneWrap">
+          <label class="field" for="limit">Limit for every column <span class="val" id="limit-v">3</span></label>
+          <input type="range" id="limit" min="1" max="10" step="1" value="3" disabled>
+        </div>
+        <div id="eachWrap" class="disabled">
+          <label class="field" for="l0">Analysis limit <span class="val" id="l0-v">3</span></label>
+          <input type="range" id="l0" min="1" max="10" step="1" value="3" disabled>
+          <label class="field" for="l1">Develop limit <span class="val" id="l1-v">3</span></label>
+          <input type="range" id="l1" min="1" max="10" step="1" value="3" disabled>
+          <label class="field" for="l2">Test limit <span class="val" id="l2-v">3</span></label>
+          <input type="range" id="l2" min="1" max="10" step="1" value="3" disabled>
+        </div>
+      </div>
+      <p class="hint">A column at its limit stops pulling from the column before it.</p>
+    </div>
+
+    <div class="group">
+      <h2>People per column<span class="help" tabindex="0" role="note" data-tip="Capacity. Each person gives one day of effort to one item per day, so a column can progress at most as many items as it has people. Extra items just wait and age.">?</span></h2>
+      <label class="field" for="p0">Analysis <span class="val" id="p0-v">2</span></label>
+      <input type="range" id="p0" min="1" max="6" step="1" value="2">
+      <label class="field" for="p1">Develop <span class="val" id="p1-v">3</span></label>
+      <input type="range" id="p1" min="1" max="6" step="1" value="3">
+      <label class="field" for="p2">Test <span class="val" id="p2-v">2</span></label>
+      <input type="range" id="p2" min="1" max="6" step="1" value="2">
+      <p class="hint">Each person works one item per day. Typical effort: Analysis 1 day, Develop 3 days, Test 1.5 days.</p>
+    </div>
+
+  </aside>
+
+  <main class="stage">
+    <section class="metrics" aria-label="Measures">
+      <div class="panel metric"><div class="n" id="m-wip">0</div><div class="l">Work in progress</div><div class="s">items in the three stages</div></div>
+      <div class="panel metric"><div class="n" id="m-tp">–</div><div class="l">Throughput</div><div class="s">items per day, last 20 days</div></div>
+      <div class="panel metric"><div class="n" id="m-ct">–</div><div class="l">Measured cycle time</div><div class="s">average days from start to Done, last 20 items finished</div></div>
+      <div class="panel metric"><div class="n" id="m-ll">–</div><div class="l">Predicted cycle time</div><div class="s">Little's Law: current WIP ÷ throughput</div></div>
+      <div class="panel metric"><div class="n" id="m-age">0</div><div class="l">Oldest item</div><div class="s">days since it started</div></div>
+    </section>
+
+    <section class="panel board" aria-label="Board">
+      <div class="boardhead"><h2>Board</h2><span class="badge custom" id="scen2">Custom settings</span></div>
+      <div class="cols" id="cols"></div>
+      <div class="legend">
+        <span><span class="card"></span>under 7 days</span>
+        <span><span class="card old"></span>7–14 days</span>
+        <span><span class="card veryold"></span>over 14 days</span>
+        <span><span class="dot"></span>finished here, waiting to be pulled</span>
+      </div>
+    </section>
+
+    <section class="panel chart">
+      <h2>Cumulative flow</h2>
+      <label class="check"><input type="checkbox" id="annot" checked> Show metrics on the chart<span class="help" tabindex="0" role="note" data-tip="Draws WIP, cycle time, lead time and throughput on the chart for the item that has just finished. Untick to let people read the shape first, then reveal.">?</span></label>
+      <svg id="cfd" viewBox="0 0 680 240" role="img" aria-label="Cumulative flow diagram"></svg>
+      <div class="clegend">
+        <span><i style="background:var(--c-backlog)"></i>Backlog</span>
+        <span><i style="background:var(--c-analysis)"></i>Analysis</span>
+        <span><i style="background:var(--c-develop)"></i>Develop</span>
+        <span><i style="background:var(--c-test)"></i>Test</span>
+        <span><i style="background:var(--c-done)"></i>Done</span>
+      </div>
+      <p class="hint">Band height is work in progress at that stage. Horizontal distance across the bands is time in the system. The slope of the Done line is throughput. The markers read these off the chart for the item that has just finished.</p>
+    </section>
+
+    <section class="panel principles">
+      <h2>What to look for</h2>
+      <ol>
+        <li><b>Push without limits.</b> Run the first scenario. Work keeps entering the system faster than Develop can finish it. WIP climbs, cards turn amber and red, and cycle time grows without a ceiling. Throughput does not improve, because the bottleneck sets the pace.</li>
+        <li><b>Pull with limits.</b> Switch on WIP limits. WIP stops growing and cycle time settles. The backlog grows instead, which makes the mismatch between demand and capacity visible rather than hiding it inside the process.</li>
+        <li><b>Find the bottleneck.</b> The column that is always full, with finished cards waiting in the column before it, is the constraint. Adding people anywhere else changes nothing. Try it.</li>
+        <li><b>Set limits per column.</b> Turn off the single limit and set each column separately. A tight limit at the constraint and a small buffer just upstream of it keeps the bottleneck fed without letting work pile up elsewhere.</li>
+        <li><b>Little's Law.</b> Cycle time equals WIP divided by throughput. The predicted figure uses the WIP on the board now; the measured figure comes from items that finished recently but started some time ago. When WIP is still growing the prediction runs ahead of the measurement. If throughput is fixed by the constraint, the only way to shorten cycle time is to hold less WIP.</li>
+        <li><b>Variation.</b> Set spread to high and compare. Uneven item sizes make queues form even when average capacity matches demand. Limits and smaller, more even items both help.</li>
+      </ol>
+    </section>
+  </main>
+</div>
+
+<script>
+(function () {
+  const STAGES = ['Analysis', 'Develop', 'Test'];
+  const MEANS = [1, 3, 1.5];
+  const COLORS = ['var(--c-analysis)', 'var(--c-develop)', 'var(--c-test)'];
+  const $ = id => document.getElementById(id);
+
+  const settings = { rate: 1, limitOn: false, sameLimit: true, limit: 3, limits: [3, 3, 3], people: [2, 3, 2], sigma: 0.45 };
+  const NAMES = { push: 'Push, no limits', pull: 'Pull with WIP limits', bottleneck: 'Bottleneck in Test' };
+  let activePreset = null;
+  function setScenario(key) {
+    activePreset = key;
+    const name = key ? NAMES[key] : 'Custom settings';
+    [$('scen'), $('scen2')].forEach(el => { el.textContent = name; el.classList.toggle('custom', !key); el.classList.add('badge'); });
+    document.querySelectorAll('[data-preset]').forEach(b => b.classList.toggle('active', b.dataset.preset === key));
+  }
+  function markCustom() { if (activePreset) setScenario(null); }
+  let state, timer = null;
+
+  function gauss() {
+    let u = 0, v = 0;
+    while (u === 0) u = Math.random();
+    while (v === 0) v = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+  function effort(mean) {
+    const f = Math.exp(settings.sigma * gauss() - settings.sigma * settings.sigma / 2);
+    return Math.max(0.5, mean * Math.min(f, 6));
+  }
+
+  function reset() {
+    state = {
+      day: 0, nextId: 1, backlog: [], cols: [[], [], []], done: [],
+      cum: { arrived: 0, entered: [0, 0, 0], done: 0 }, history: [], carry: 0
+    };
+    record();
+    render();
+  }
+
+  function newItem() {
+    return { id: state.nextId++, arrived: state.day, started: null, finished: null,
+             remaining: MEANS.map(effort), ready: false, readyAt: 0 };
+  }
+
+  function limitOf(s) { return settings.limitOn ? (settings.sameLimit ? settings.limit : settings.limits[s]) : Infinity; }
+
+  function tick() {
+    state.day++;
+    // Arrivals
+    state.carry += settings.rate;
+    while (state.carry >= 1) { state.backlog.push(newItem()); state.cum.arrived++; state.carry -= 1; }
+
+    // Work: each person gives one day to the oldest unfinished item nobody else has today.
+    for (let s = 0; s < 3; s++) {
+      const touched = new Set();
+      for (let p = 0; p < settings.people[s]; p++) {
+        const item = state.cols[s].find(it => !it.ready && !touched.has(it.id));
+        if (!item) break;
+        touched.add(item.id);
+        item.remaining[s] -= 1;
+        if (item.remaining[s] <= 0.001) { item.ready = true; item.readyAt = state.day; }
+      }
+    }
+
+    // Pull, downstream first.
+    // Done pulls everything finished in Test.
+    for (let i = state.cols[2].length - 1; i >= 0; i--) {
+      const it = state.cols[2][i];
+      if (it.ready) { it.finished = state.day; state.done.push(it); state.cols[2].splice(i, 1); state.cum.done++; }
+    }
+    for (let s = 2; s >= 1; s--) {
+      while (state.cols[s].length < limitOf(s)) {
+        const idx = state.cols[s - 1].findIndex(it => it.ready);
+        if (idx < 0) break;
+        const it = state.cols[s - 1].splice(idx, 1)[0];
+        it.ready = false; state.cols[s].push(it); state.cum.entered[s]++;
+      }
+    }
+    while (state.cols[0].length < limitOf(0) && state.backlog.length) {
+      const it = state.backlog.shift();
+      it.started = state.day; state.cols[0].push(it); state.cum.entered[0]++;
+    }
+    record();
+    render();
+  }
+
+  function record() {
+    state.history.push({ a: state.cum.arrived, e0: state.cum.entered[0], e1: state.cum.entered[1], e2: state.cum.entered[2], d: state.cum.done });
+  }
+
+  // ---------- metrics ----------
+  function metrics() {
+    const wip = state.cols.reduce((n, c) => n + c.length, 0);
+    const window = Math.min(20, state.day);
+    let tp = null, ct = null;
+    if (window > 0) {
+      const then = state.history[state.day - window].d;
+      tp = (state.cum.done - then) / window;
+    }
+    const recent = state.done.slice(-20);
+    if (recent.length) ct = recent.reduce((n, it) => n + (it.finished - it.started), 0) / recent.length;
+    let oldest = 0;
+    state.cols.forEach(c => c.forEach(it => { oldest = Math.max(oldest, state.day - it.started); }));
+    return { wip, tp, ct, oldest };
+  }
+
+  // ---------- render ----------
+  function cardEl(it, cls) {
+    const age = state.day - (it.started ?? state.day);
+    const d = document.createElement('div');
+    d.className = 'card' + (cls ? ' ' + cls : '') + (cls ? '' : (age > 14 ? ' veryold' : age > 6 ? ' old' : '')) + (it.ready ? ' ready' : '');
+    d.textContent = it.id;
+    d.title = cls === 'done' ? `Item ${it.id}: ${it.finished - it.started} days` : `Item ${it.id}: ${age} days since start`;
+    return d;
+  }
+  function column(name, color, items, limit, cls) {
+    const col = document.createElement('div');
+    col.className = 'col' + (limit !== Infinity && items.length >= limit ? ' full' : '');
+    const head = document.createElement('div');
+    head.className = 'colhead'; head.style.setProperty('--c', color);
+    head.innerHTML = `<b>${name}</b><span class="wip">${items.length}${limit === Infinity ? '' : ' / ' + limit}</span>`;
+    col.appendChild(head);
+    const cards = document.createElement('div'); cards.className = 'cards';
+    const show = cls === 'done' ? items.slice(-24) : items.slice(0, 24);
+    show.forEach(it => cards.appendChild(cardEl(it, cls)));
+    if (items.length > 24) { const m = document.createElement('span'); m.className = 'more'; m.textContent = `+${items.length - 24}`; cards.appendChild(m); }
+    col.appendChild(cards);
+    return col;
+  }
+
+  function render() {
+    if (!state) return;
+    const cols = $('cols'); cols.innerHTML = '';
+    cols.appendChild(column('Backlog', 'var(--c-backlog)', state.backlog, Infinity));
+    for (let s = 0; s < 3; s++) cols.appendChild(column(STAGES[s], COLORS[s], state.cols[s], limitOf(s)));
+    cols.appendChild(column('Done', 'var(--c-done)', state.done, Infinity, 'done'));
+
+    const m = metrics();
+    $('m-wip').textContent = m.wip;
+    $('m-tp').textContent = m.tp === null ? '–' : m.tp.toFixed(2);
+    $('m-ct').textContent = m.ct === null ? '–' : m.ct.toFixed(1);
+    $('m-ll').textContent = (m.tp && m.tp > 0) ? (m.wip / m.tp).toFixed(1) : '–';
+    $('m-age').textContent = m.oldest;
+    const target = +$('runFor').value;
+    $('dayline').textContent = `Day ${state.day}${target ? ' of ' + target : ''} · ${state.done.length} items done`;
+    $('scen2').textContent = (activePreset ? NAMES[activePreset] : 'Custom settings') + ` · day ${state.day}`;
+    drawCfd();
+  }
+
+  function drawCfd() {
+    const svg = $('cfd');
+    const W = 680, H = 240, L = 36, R = 10, T = 10, B = 26;
+    const span = 270;
+    const h = state.history.slice(-span);
+    const n = h.length;
+    const maxY = Math.max(5, ...h.map(p => p.a));
+    const x = i => L + (n === 1 ? 0 : i * (W - L - R) / (n - 1));
+    const y = v => T + (H - T - B) * (1 - v / maxY);
+    const start = state.history.length - n;
+
+    function band(top, bottom, fill) {
+      let d = '';
+      h.forEach((p, i) => { d += (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(top(p)).toFixed(1) + ' '; });
+      for (let i = n - 1; i >= 0; i--) d += 'L' + x(i).toFixed(1) + ' ' + y(bottom(h[i])).toFixed(1) + ' ';
+      return `<path d="${d}Z" fill="${fill}" opacity="0.9"/>`;
+    }
+    let out = '';
+    out += band(p => p.a, p => p.e0, 'var(--c-backlog)');
+    out += band(p => p.e0, p => p.e1, 'var(--c-analysis)');
+    out += band(p => p.e1, p => p.e2, 'var(--c-develop)');
+    out += band(p => p.e2, p => p.d, 'var(--c-test)');
+    out += band(p => p.d, () => 0, 'var(--c-done)');
+    // axes
+    out += `<line x1="${L}" y1="${T}" x2="${L}" y2="${H - B}" stroke="var(--line)"/>`;
+    out += `<line x1="${L}" y1="${H - B}" x2="${W - R}" y2="${H - B}" stroke="var(--line)"/>`;
+    [0, 0.5, 1].forEach(f => {
+      const v = Math.round(maxY * f);
+      out += `<text x="${L - 6}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="var(--muted)">${v}</text>`;
+    });
+    out += `<text x="${L}" y="${H - 8}" font-size="11" fill="var(--muted)">Day ${start}</text>`;
+    out += `<text x="${W - R}" y="${H - 8}" text-anchor="end" font-size="11" fill="var(--muted)">Day ${state.day}</text>`;
+    out += `<text x="${(L + W - R) / 2}" y="${H - 8}" text-anchor="middle" font-size="11" fill="var(--muted)">items</text>`;
+    if ($('annot').checked && state.day >= 5 && state.cum.done > 0) out += annotations(h, n, start, x, y, L, W, R, T);
+    svg.innerHTML = out;
+  }
+
+  // Metric markers read straight off the chart.
+  function annotations(h, n, start, x, y, L, W, R, T) {
+    const last = h[n - 1];
+    const xr = x(n - 1);
+    const label = (tx, ty, text, anchor) =>
+      `<text x="${tx}" y="${ty}" text-anchor="${anchor || 'start'}" font-size="11" font-weight="600" fill="var(--ink)" stroke="var(--panel)" stroke-width="3" paint-order="stroke">${text}</text>`;
+    const arrow = (x1, y1, x2, y2, dash) =>
+      `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--ink)" stroke-width="1.5" ${dash ? 'stroke-dasharray="4 3"' : ''} marker-start="url(#dot)" marker-end="url(#dot)"/>`;
+    let out = `<defs><marker id="dot" viewBox="0 0 6 6" refX="3" refY="3" markerWidth="5" markerHeight="5"><circle cx="3" cy="3" r="3" fill="var(--ink)"/></marker></defs>`;
+
+    // WIP: vertical distance between started and done at the right edge.
+    const wip = last.e0 - last.d;
+    if (wip > 0) {
+      out += arrow(xr - 6, y(last.d), xr - 6, y(last.e0));
+      const tall = y(last.d) - y(last.e0) > 34;
+      out += label(xr - 12, tall ? y(last.e0) + 12 : y(last.e0) - 5, `WIP ${wip}`, 'end');
+    }
+
+    // Cycle time and lead time: how far back the started / arrived lines reached today's done count.
+    const D = last.d;
+    const full = state.history;
+    let js = full.findIndex(p => p.e0 >= D);
+    let ja = full.findIndex(p => p.a >= D);
+    const px = j => x(Math.max(0, j - start));
+    if (js >= 0 && js < state.day) {
+      const ct = state.day - js;
+      out += arrow(px(js), y(D), xr, y(D));
+      out += label(xr - 12, y(D) - 6, `Cycle time ${ct} days`, 'end');
+    }
+    if (ja >= 0 && ja < state.day && ja !== js) {
+      const lt = state.day - ja;
+      const yy = y(D) + 14;
+      out += arrow(px(ja), yy, xr, yy, true);
+      out += label(xr - 12, yy + 14, `Lead time ${lt} days from arrival`, 'end');
+    }
+
+    // Throughput: slope of the Done line over the last 20 days.
+    const win = Math.min(20, n - 1);
+    if (win > 0) {
+      const p0 = h[n - 1 - win];
+      const tp = (last.d - p0.d) / win;
+      const x0 = x(n - 1 - win);
+      out += `<line x1="${x0}" y1="${y(p0.d)}" x2="${xr}" y2="${y(last.d)}" stroke="var(--ink)" stroke-width="3" opacity="0.85"/>`;
+      out += label(xr - 12, y(last.d) + (ja >= 0 && ja !== js ? 44 : 28), `Throughput ${tp.toFixed(2)} items/day`, 'end');
+    }
+    return out;
+  }
+
+  // ---------- controls ----------
+  function stopTimer() { clearInterval(timer); timer = null; $('play').textContent = 'Play'; }
+  function runTick() {
+    const target = +$('runFor').value;
+    if (target && state.day >= target) { stopTimer(); return; }
+    tick();
+    if (target && state.day >= target) stopTimer();
+  }
+  function play() {
+    if (timer) { stopTimer(); return; }
+    const target = +$('runFor').value;
+    if (target && state.day >= target) return;
+    timer = setInterval(runTick, +$('speed').value);
+    $('play').textContent = 'Pause';
+  }
+  $('play').addEventListener('click', play);
+  $('step').addEventListener('click', () => { if (timer) play(); tick(); });
+  $('reset').addEventListener('click', () => { if (timer) play(); reset(); });
+  $('speed').addEventListener('change', () => { if (timer) { clearInterval(timer); timer = setInterval(runTick, +$('speed').value); } });
+
+  function bindRange(id, fn) {
+    const el = $(id);
+    const upd = () => { $(id + '-v').textContent = fn(+el.value); render(); };
+    el.addEventListener('input', () => { markCustom(); upd(); });
+    return upd;
+  }
+  const updRate = bindRange('rate', v => { settings.rate = v; return v.toFixed(2); });
+  const updLimit = bindRange('limit', v => { settings.limit = v; return v; });
+  const updP = [0, 1, 2].map(s => bindRange('p' + s, v => { settings.people[s] = v; return v; }));
+  const updL = [0, 1, 2].map(s => bindRange('l' + s, v => { settings.limits[s] = v; return v; }));
+  function syncLimitControls() {
+    const on = settings.limitOn, same = settings.sameLimit;
+    $('limitWrap').classList.toggle('disabled', !on);
+    $('sameLimit').disabled = !on;
+    $('oneWrap').classList.toggle('disabled', !same);
+    $('eachWrap').classList.toggle('disabled', same);
+    $('limit').disabled = !(on && same);
+    [0, 1, 2].forEach(s => { $('l' + s).disabled = !(on && !same); });
+  }
+  $('limitOn').addEventListener('change', e => { markCustom(); settings.limitOn = e.target.checked; syncLimitControls(); render(); });
+  $('sameLimit').addEventListener('change', e => { markCustom(); settings.sameLimit = e.target.checked; syncLimitControls(); render(); });
+  $('variation').addEventListener('change', e => { markCustom(); settings.sigma = +e.target.value; });
+  $('annot').addEventListener('change', drawCfd);
+
+  const PRESETS = {
+    push:       { rate: 1, limitOn: false, sameLimit: true, limit: 3, limits: [3, 3, 3], people: [2, 3, 2], sigma: 0.45 },
+    pull:       { rate: 1, limitOn: true,  sameLimit: true, limit: 3, limits: [3, 3, 3], people: [2, 3, 2], sigma: 0.45 },
+    bottleneck: { rate: 1, limitOn: true,  sameLimit: true, limit: 3, limits: [3, 3, 3], people: [2, 3, 1], sigma: 0.45 }
+  };
+  function apply(p) {
+    $('rate').value = p.rate; $('limit').value = p.limit;
+    $('limitOn').checked = p.limitOn; $('sameLimit').checked = p.sameLimit;
+    settings.limitOn = p.limitOn; settings.sameLimit = p.sameLimit;
+    settings.sigma = p.sigma; $('variation').value = String(p.sigma);
+    [0, 1, 2].forEach(s => { $('p' + s).value = p.people[s]; $('l' + s).value = p.limits[s]; });
+    syncLimitControls();
+    updRate(); updLimit(); updP.forEach(f => f()); updL.forEach(f => f());
+  }
+  document.querySelectorAll('[data-preset]').forEach(b => b.addEventListener('click', () => {
+    if (timer) play();
+    apply(PRESETS[b.dataset.preset]);
+    setScenario(b.dataset.preset);
+    reset();
+    play();
+  }));
+
+  apply(PRESETS.push);
+  setScenario('push');
+  reset();
+})();
+</script>
+</body>
+</html>

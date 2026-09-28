@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Software lifecycle simulation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #eef0f3; --panel: #ffffff; --ink: #1c2330; --muted: #5d6675; --line: #d5d9e0;
+    --accent: #2456a6; --accent-ink: #ffffff; --bad: #c9352b;
+    --k-a: #6b8fd6; --k-d: #8f6bd6; --k-b: #3d9c8a; --k-t: #e0a23a; --k-r: #4a5261; --k-w: #d9534f;
+    --val: #4aa36c; --eff: #8c94a3;
+    --f-none: #dfe3e9; --f-prog: #b9c9ec; --f-ok: #4aa36c; --f-wrong: #d9534f; --f-fix: #e0a23a;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #161a21; --panel: #202631; --ink: #e8ebf0; --muted: #9aa3b2; --line: #343c4a;
+      --accent: #7ea2e6; --accent-ink: #10151d; --k-r: #b9c0cc; --eff: #6b7382;
+      --f-none: #2b3340; --f-prog: #3e5178;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #161a21; --panel: #202631; --ink: #e8ebf0; --muted: #9aa3b2; --line: #343c4a;
+    --accent: #7ea2e6; --accent-ink: #10151d; --k-r: #b9c0cc; --eff: #6b7382;
+    --f-none: #2b3340; --f-prog: #3e5178;
+  }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  *, *::before, *::after { box-sizing: inherit; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: "IBM Plex Sans", "Segoe UI", Helvetica, Arial, sans-serif; font-size: 15px; line-height: 1.45; }
+  header { padding: 22px 24px 8px; max-width: 1240px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; font-weight: 600; margin: 0 0 4px; letter-spacing: -0.01em; }
+  header p { margin: 0; color: var(--muted); max-width: 72ch; }
+  .layout { display: grid; grid-template-columns: 290px 1fr; gap: 18px; max-width: 1240px; margin: 0 auto; padding: 12px 24px 40px; }
+  @media (max-width: 860px) { .layout { grid-template-columns: 1fr; padding: 12px 14px 40px; } header { padding: 18px 14px 6px; } }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+  .controls { padding: 16px; align-self: start; position: sticky; top: env(safe-area-inset-top, 0px); }
+  @media (max-width: 860px) { .controls { position: static; } }
+  h2 { font-size: 0.95rem; font-weight: 600; margin: 0 0 10px; display: flex; align-items: center; }
+  .group { padding: 12px 0; border-top: 1px solid var(--line); }
+  .group:first-of-type { border-top: 0; padding-top: 0; }
+  button { font: inherit; font-size: 0.9rem; cursor: pointer; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); padding: 6px 10px; }
+  button:hover { border-color: var(--accent); }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.primary, .lifecycles button.active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 500; }
+  .run { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .lifecycles { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .lifecycles button { text-align: left; }
+  label.field { display: flex; align-items: center; margin: 8px 0 2px; font-size: 0.9rem; }
+  label.field span.val { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 100%; accent-color: var(--accent); margin: 0 0 4px; }
+  select { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; }
+  .hint { font-size: 0.8rem; color: var(--muted); margin: 4px 0 0; }
+  .help { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; margin-left: 6px; border-radius: 50%; border: 1px solid var(--muted); color: var(--muted); font-size: 0.7rem; font-weight: 600; cursor: help; position: relative; vertical-align: middle; flex: none; }
+  .help:hover, .help:focus { border-color: var(--accent); color: var(--accent); outline: none; }
+  .help::after { content: attr(data-tip); position: absolute; left: 0; top: 22px; z-index: 5; width: 240px; background: var(--ink); color: var(--bg); font-size: 0.8rem; font-weight: 400; line-height: 1.35; padding: 8px 10px; border-radius: 6px; box-shadow: 0 4px 14px rgba(0,0,0,.2); white-space: normal; opacity: 0; pointer-events: none; transition: opacity .12s; }
+  .help:hover::after, .help:focus::after { opacity: 1; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-size: 0.8rem; font-weight: 500; }
+  .badge.done { background: var(--val); color: #fff; }
+
+  .stage { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+  .metrics { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
+  @media (max-width: 1100px) { .metrics { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 520px) { .metrics { grid-template-columns: repeat(2, 1fr); } }
+  .metric { padding: 12px 14px; }
+  .metric .n { font-size: 1.5rem; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .metric .l { font-size: 0.82rem; color: var(--muted); margin-top: 2px; }
+  .metric .s { font-size: 0.76rem; color: var(--muted); }
+
+  .card { padding: 14px; }
+  .cardhead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 8px; flex-wrap: wrap; }
+  .cardhead h2 { margin: 0; }
+  .lifedesc { font-size: 0.88rem; color: var(--muted); margin: 0 0 10px; max-width: 80ch; }
+  svg { width: 100%; height: auto; display: block; }
+  .legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 0.8rem; color: var(--muted); margin-top: 8px; }
+  .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+  .features { display: grid; grid-template-columns: repeat(10, 1fr); gap: 5px; max-width: 520px; }
+  .feat { aspect-ratio: 1; border-radius: 4px; background: var(--f-none); position: relative; font-size: 0.7rem; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px; color: var(--ink); overflow: hidden; }
+  .feat .fill { position: absolute; left: 0; right: 0; bottom: 0; background: var(--f-prog); }
+  .feat.ok .fill { background: var(--f-ok); }
+  .feat.wrong .fill { background: var(--f-wrong); }
+  .feat.fix .fill { background: var(--f-fix); }
+  .feat span { position: relative; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.88rem; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+  th { font-weight: 600; color: var(--muted); font-size: 0.8rem; }
+  td.num, th.num { text-align: right; }
+  tr.current td { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+  .principles ol { margin: 0; padding-left: 20px; }
+  .principles li { margin-bottom: 8px; max-width: 78ch; }
+  .principles li b { font-weight: 600; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Software lifecycle simulation</h1>
+  <p>One project of 20 features, one team of four, one world. Run it as waterfall, incremental, iterative or continuous delivery and compare when value arrives, what rework costs and how long it takes.</p>
+</header>
+
+<div class="layout">
+  <aside class="panel controls" aria-label="Settings">
+    <div class="group">
+      <h2>Lifecycle<span class="help" tabindex="0" data-tip="Choosing a lifecycle resets the board and runs the same project, in the same world, that way. Finished runs are kept in the comparison table below the chart.">?</span></h2>
+      <div class="lifecycles">
+        <button data-life="waterfall">Waterfall</button>
+        <button data-life="incremental">Incremental</button>
+        <button data-life="agile">Iterative (agile)</button>
+        <button data-life="continuous">Continuous</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <h2>Run<span class="help" tabindex="0" data-tip="Play advances one day per tick. Step moves one day. Reset restarts the current lifecycle in the same world. Instant runs the whole project at once so you can fill the comparison table quickly.">?</span></h2>
+      <div class="run">
+        <button id="play" class="primary">Play</button>
+        <button id="step">Step 1 day</button>
+        <button id="reset">Reset</button>
+        <select id="speed" aria-label="Speed">
+          <option value="400">Slow</option>
+          <option value="150" selected>Normal</option>
+          <option value="40">Fast</option>
+          <option value="0">Instant</option>
+        </select>
+      </div>
+      <p class="hint" id="dayline">Day 0</p>
+    </div>
+
+    <div class="group">
+      <h2>The world<span class="help" tabindex="0" data-tip="Three settings describe the environment. Wrong from the start is what the team misunderstood on day one. Changes while you build is what moved after that. Cost of a release is the overhead each time users see the product. All apply to every lifecycle equally.">?</span></h2>
+      <label class="field" for="unc">Wrong from the start <span class="val" id="unc-v">25%</span></label>
+      <input type="range" id="unc" min="0" max="60" step="5" value="25">
+      <p class="hint">Share of features that are misunderstood when they are specified. This number is fixed on day one; the lifecycle cannot reduce it, only change how soon each mistake is found and how much has been built on it by then.</p>
+      <label class="field" for="drift">Changes while you build <span class="val" id="drift-v">1.0% per day</span></label>
+      <input type="range" id="drift" min="0" max="4" step="0.5" value="1">
+      <p class="hint">Chance, per day, that a feature specified correctly stops being what users need before it is released. The longer the gap between specifying a feature and releasing it, the more likely this is to happen to it.</p>
+      <label class="field" for="relcost">Cost of a release <span class="val" id="relcost-v">2 person-days</span></label>
+      <input type="range" id="relcost" min="0" max="20" step="1" value="2">
+      <p class="hint">Fixed overhead per release: regression testing, deployment, sign-off.</p>
+      <label class="field" style="margin-top:12px">Random draw <span class="val" id="worldline">Draw 1</span></label>
+      <p class="hint" style="margin:0 0 6px">Which features are wrong, and on which day each change happens, are drawn at random. The same draw is used for every lifecycle, so a comparison is fair. Press the button for a different draw.</p>
+      <button id="newworld">Make a new draw</button>
+    </div>
+
+    <div class="group">
+      <h2>Fixed assumptions<span class="help" tabindex="0" data-tip="Kept constant so the comparison is about the lifecycle, not the inputs. Each person gives one day of effort to one task per day.">?</span></h2>
+      <p class="hint" style="margin:0">20 features, each 6.5 person-days (analysis 1, design 1, build 3, test 1.5). Team of four. Sprints are ten days. Fixing a feature that was wrong costs the effort already spent on it, growing with the time since it was specified (up to three times).</p>
+    </div>
+  </aside>
+
+  <main class="stage">
+    <section class="panel card">
+      <div class="cardhead"><h2>How the work flows</h2><span class="badge" id="flowbadge">Waterfall</span></div>
+      <svg id="flow" viewBox="0 0 680 170" role="img" aria-label="Flow of work for the selected lifecycle"></svg>
+    </section>
+
+    <section class="metrics" aria-label="Measures">
+      <div class="panel metric"><div class="n" id="m-val">0%</div><div class="l">Value delivered</div><div class="s">share of features live and correct</div></div>
+      <div class="panel metric"><div class="n" id="m-first">–</div><div class="l">Time to first value</div><div class="s">day users first get something useful</div></div>
+      <div class="panel metric"><div class="n" id="m-blind">–</div><div class="l">Spent before feedback</div><div class="s">person-days before the first release</div></div>
+      <div class="panel metric"><div class="n" id="m-eff">0</div><div class="l">Effort so far</div><div class="s">person-days, plan was 130</div></div>
+      <div class="panel metric"><div class="n" id="m-rw">0</div><div class="l">Rework</div><div class="s">person-days fixing wrong features</div></div>
+      <div class="panel metric"><div class="n" id="m-rel">0</div><div class="l">Releases</div><div class="s">times users saw the product</div></div>
+    </section>
+
+    <section class="panel card">
+      <div class="cardhead"><h2>What the team is doing each day</h2><span class="badge" id="lifebadge">Waterfall</span></div>
+      <p class="lifedesc" id="lifedesc"></p>
+      <svg id="timeline" viewBox="0 0 680 70" role="img" aria-label="Daily activity timeline"></svg>
+      <div class="legend">
+        <span><i style="background:var(--k-a)"></i>Analysis</span>
+        <span><i style="background:var(--k-d)"></i>Design</span>
+        <span><i style="background:var(--k-b)"></i>Build</span>
+        <span><i style="background:var(--k-t)"></i>Test</span>
+        <span><i style="background:var(--k-r)"></i>Release</span>
+        <span><i style="background:var(--k-w)"></i>Rework</span>
+      </div>
+    </section>
+
+    <section class="panel card">
+      <h2>Features<span class="help" tabindex="0" data-tip="Each square is one feature. The fill shows how much of it is built. Green means live and correct, red means users saw it and it was wrong, amber means being fixed.">?</span></h2>
+      <div class="features" id="features"></div>
+      <div class="legend">
+        <span><i style="background:var(--f-prog)"></i>in progress</span>
+        <span><i style="background:var(--f-ok)"></i>live and correct</span>
+        <span><i style="background:var(--f-wrong)"></i>live but wrong</span>
+        <span><i style="background:var(--f-fix)"></i>being fixed</span>
+      </div>
+    </section>
+
+    <section class="panel card">
+      <h2>Value delivered and effort spent<span class="help" tabindex="0" data-tip="Both lines are a percentage of the original plan of 130 person-days, so 100% effort means the budget is used. The gap between the lines is money spent that users have not yet benefited from.">?</span></h2>
+      <svg id="chart" viewBox="0 0 680 240" role="img" aria-label="Value delivered and effort spent over time"></svg>
+      <div class="legend">
+        <span><i style="background:var(--val)"></i>Value delivered</span>
+        <span><i style="background:var(--eff)"></i>Effort spent</span>
+      </div>
+    </section>
+
+    <section class="panel card">
+      <div class="cardhead"><h2>Comparison, same settings and draw</h2><button id="cleartable" style="font-size:0.8rem;padding:4px 8px">Clear</button></div>
+      <table id="results">
+        <thead><tr><th>Lifecycle</th><th class="num">First value</th><th class="num">Finished</th><th class="num">Effort, person-days (plan 130)</th><th class="num">Rework, person-days</th><th class="num">Releases</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <p class="hint">A row is filled in when a run finishes. Changing a setting or making a new draw clears the table, because the rows would no longer be comparable.</p>
+    </section>
+
+    <section class="panel card principles">
+      <h2>What to look for</h2>
+      <ol>
+        <li><b>When value arrives.</b> Waterfall delivers nothing until the end, then everything at once. Continuous starts delivering in the first week. Time to first value is the clearest single difference.</li>
+        <li><b>The cost of being wrong late.</b> Every lifecycle has the same wrong features. What differs is when they are found and how much has been built on them by then. Watch the size of the red rework band at the end of a waterfall run.</li>
+        <li><b>Spent before feedback.</b> This is the money at risk. Waterfall spends the whole budget before anyone outside the team sees the product.</li>
+        <li><b>Change during the project.</b> Raise the changes-while-you-build setting. The longer a feature waits between being specified and being released, the more likely the world has moved. Long lifecycles suffer most.</li>
+        <li><b>Release cost is the price of continuous delivery.</b> Set the cost of a release to 15 and continuous becomes the slowest and most expensive option, keeping only its early first value. Set it to 0 and it wins on almost every measure. Reducing release cost is what the investment in automation buys, and without it small batches do not pay.</li>
+        <li><b>Incremental and agile differ.</b> Incremental is scope-boxed: five features, phase by phase, however long they take. Agile is time-boxed: ten days, whatever fits, with work flowing inside the sprint. Watch the activity strip: agile releases on a fixed cadence and pulls fixes into the very next sprint, but the team can sit idle at the end of a sprint when nothing else fits. That idle time is the price of the timebox; continuous removes it by removing the box.</li>
+      </ol>
+    </section>
+  </main>
+</div>
+
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  const N = 20, TEAM = 4;
+  const PH = { A: 1, D: 1, B: 3, T: 1.5 };
+  const BASE = N * 6.5;
+  const MAXDAY = 400, SPRINT = 10;
+  const LIFE = {
+    waterfall:   { name: 'Waterfall',   desc: 'Analyse every feature, then design them all, build them all, test them all, and release once. Anything found wrong is fixed afterwards and released again.' },
+    incremental: { name: 'Incremental', desc: 'Split the 20 features into four slices of five. Each slice goes through analysis, design, build and test and is released before the next slice starts. Wrong features are fixed before moving on.' },
+    agile:       { name: 'Iterative (agile)', desc: 'Fixed ten-day sprints. At the start of each sprint the team takes fixes first, then as many features from the prioritised backlog as fit its capacity. Inside the sprint, features flow through analysis, design, build and test, and the sprint ends with one release. Feedback reshapes the next sprint. Nothing new starts mid-sprint.' },
+    continuous:  { name: 'Continuous',  desc: 'Features flow one at a time through analysis, design, build and test, with up to four in progress, and each is released as soon as it is ready. Feedback arrives within days.' }
+  };
+
+  const settings = { unc: 0.25, drift: 0.01, relcost: 2, seed: 1 };
+  let life = 'waterfall', state, timer = null;
+  const results = {};
+
+  // Seeded random so every lifecycle faces the same world.
+  function rng(seed) { let a = seed >>> 0; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  function makeWorld() {
+    const r = rng(settings.seed * 7919 + Math.round(settings.unc * 100) * 131 + Math.round(settings.drift * 1000) * 17);
+    const feats = [];
+    for (let i = 0; i < N; i++) {
+      const wrong = r() < settings.unc;
+      const changeDay = settings.drift > 0 ? Math.floor(-Math.log(1 - r()) / settings.drift) + 1 : Infinity;
+      feats.push({ wrong, changeDay });
+    }
+    return feats;
+  }
+
+  // ---------- plan builders ----------
+  function task(kind, feat, effort, deps, extra) { return Object.assign({ kind, feat, effort, deps, done: 0, id: null, rework: false }, extra || {}); }
+  function build(kind, order) {
+    const tasks = [];
+    const add = t => { t.id = tasks.length; tasks.push(t); return t.id; };
+    const phaseIds = () => ({ A: [], D: [], B: [], T: [] });
+    if (kind === 'waterfall') {
+      const p = phaseIds();
+      for (const f of order) p.A.push(add(task('A', f, PH.A, [])));
+      for (const f of order) p.D.push(add(task('D', f, PH.D, p.A.slice())));
+      for (const f of order) p.B.push(add(task('B', f, PH.B, p.D.slice())));
+      for (const f of order) p.T.push(add(task('T', f, PH.T, p.B.slice(), { fit: 1 })));
+      add(task('R', null, settings.relcost, p.T.slice(), { feats: order.slice() }));
+    } else if (kind === 'incremental') {
+      let prevRel = [];
+      for (let s = 0; s < N; s += 5) {
+        const slice = order.slice(s, s + 5), p = phaseIds();
+        for (const f of slice) p.A.push(add(task('A', f, PH.A, prevRel.slice())));
+        for (const f of slice) p.D.push(add(task('D', f, PH.D, p.A.slice())));
+        for (const f of slice) p.B.push(add(task('B', f, PH.B, p.D.slice())));
+        for (const f of slice) p.T.push(add(task('T', f, PH.T, p.B.slice(), { fit: 1 })));
+        prevRel = [add(task('R', null, settings.relcost, p.T.slice(), { feats: slice.slice() }))];
+      }
+    } else if (kind === 'agile') {
+      // Same chains as continuous, but nothing is committed until a sprint plans it; releases are created per sprint.
+      for (const f of order) {
+        const a = add(task('A', f, PH.A, [], { committed: false }));
+        const d = add(task('D', f, PH.D, [a], { committed: false }));
+        const b = add(task('B', f, PH.B, [d], { committed: false }));
+        add(task('T', f, PH.T, [b], { fit: 1, committed: false }));
+      }
+    } else {
+      for (const f of order) {
+        const a = add(task('A', f, PH.A, []));
+        const d = add(task('D', f, PH.D, [a]));
+        const b = add(task('B', f, PH.B, [d]));
+        const t = add(task('T', f, PH.T, [b], { fit: 1 }));
+        add(task('R', null, settings.relcost, [t], { feats: [f] }));
+      }
+    }
+    return tasks;
+  }
+
+  // ---------- simulation ----------
+  function reset() {
+    const world = makeWorld();
+    const order = Array.from({ length: N }, (_, i) => i);
+    state = {
+      day: 0, finished: false,
+      feats: world.map((w, i) => ({ id: i, wrong: w.wrong, changeDay: w.changeDay, released: false, correct: false, fit: 0, fitReached: 0, spent: 0, specDay: null, fixing: false, changed: false })),
+      tasks: build(life, order),
+      activity: [], value: [0], effort: [0], totalEffort: 0, rework: 0, releases: 0, firstValue: null, blindSpend: null
+    };
+    render();
+  }
+  function featureDone(f) { return f.released && f.correct && f.fit >= 1 && !f.fixing; }
+  const depsDone = t => t.deps.every(id => state.tasks[id].done >= state.tasks[id].effort);
+  const available = t => t.committed !== false && (t.readyFrom === undefined || state.day >= t.readyFrom);
+  function isReady(t) { return t.done < t.effort && available(t) && depsDone(t); }
+  function planSprint() {
+    const cap = TEAM * SPRINT - settings.relcost;
+    let load = 0;
+    for (const t of state.tasks) if (t.committed !== false && t.done < t.effort && t.kind !== 'R') load += t.effort - t.done;
+    const byFeat = {};
+    for (const t of state.tasks) if (t.committed === false) (byFeat[t.feat] = byFeat[t.feat] || []).push(t);
+    for (const fid of Object.keys(byFeat).map(Number).sort((a, b) => a - b)) {
+      const eff = byFeat[fid].reduce((sum, t) => sum + t.effort, 0);
+      if (load + eff > cap + 1e-9) break;
+      byFeat[fid].forEach(t => { t.committed = true; }); load += eff;
+    }
+    const end = state.day + SPRINT - 1;
+    const r = task('R', null, settings.relcost, [], { dynamic: true, readyFrom: end - Math.max(1, Math.ceil(settings.relcost / TEAM)) + 1 });
+    r.id = state.tasks.length; state.tasks.push(r);
+  }
+
+  function processRelease(t) {
+    let feats = t.feats;
+    if (t.dynamic) {
+      const doneAll = list => list.every(o => o.done >= o.effort - 1e-9);
+      feats = state.feats.filter(f => {
+        const work = state.tasks.filter(o => o.feat === f.id && o.kind !== 'W');
+        const fixes = state.tasks.filter(o => o.feat === f.id && o.kind === 'W');
+        return f.fixing ? doneAll(fixes) : (!f.released && doneAll(work));
+      }).map(f => f.id);
+      if (!feats.length) return;
+    }
+    state.releases++;
+    if (state.blindSpend === null) state.blindSpend = state.totalEffort;
+    const wrongOnes = [];
+    for (const fi of feats) {
+      const f = state.feats[fi];
+      f.released = true;
+      f.fit = Math.max(f.fit, f.fitReached);
+      if (f.fixing) { f.wrong = false; f.correct = true; f.fixing = false; }
+      else if (f.wrong) wrongOnes.push(f);
+      else f.correct = true;
+    }
+    if (wrongOnes.length) {
+      const ids = [];
+      for (const f of wrongOnes) {
+        f.fixing = true; f.correct = false;
+        const late = Math.min(3, 1 + (state.day - (f.specDay ?? state.day)) / 40);
+        const eff = Math.max(1, f.spent * late);
+        const rt = task('W', f.id, eff, [], { rework: true });
+        rt.id = state.tasks.length; state.tasks.push(rt); ids.push(rt.id);
+        // anything not yet started for this feature waits for the fix
+        for (const o of state.tasks) if (o.feat === f.id && o.done === 0 && o.id !== rt.id && !o.rework) o.deps.push(rt.id);
+      }
+      if (!t.dynamic) {
+        const fr = task('R', null, settings.relcost, ids, { feats: wrongOnes.map(f => f.id), rework: true });
+        fr.id = state.tasks.length; state.tasks.push(fr);
+      }
+    }
+  }
+
+  function tick() {
+    if (state.finished || state.day >= MAXDAY) return;
+    state.day++;
+    // requirements change in the world
+    for (const f of state.feats) if (f.specDay !== null && !featureDone(f) && !f.wrong && f.changeDay <= state.day && !f.changed) { f.wrong = true; f.changed = true; }
+
+    if (life === 'agile' && (state.day - 1) % SPRINT === 0) planSprint();
+    const act = { A: 0, D: 0, B: 0, T: 0, R: 0, W: 0 };
+    // zero-cost releases complete as soon as their inputs are ready
+    const freeReleases = () => { let again = true; while (again) { again = false; for (const t of state.tasks) if (t.kind === 'R' && t.effort === 0 && !t.processed && available(t) && depsDone(t)) { t.processed = true; processRelease(t); again = true; } } };
+    freeReleases();
+
+    const touched = new Set();
+    for (let p = 0; p < TEAM; p++) {
+      const ready = state.tasks.filter(t => !touched.has(t.id) && isReady(t));
+      if (!ready.length) break;
+      ready.sort((a, b) => (b.rework - a.rework) || ((b.kind === 'R') - (a.kind === 'R')) || (a.id - b.id));
+      const t = ready[0];
+      if (t.kind !== 'R') touched.add(t.id);
+      const unit = Math.min(1, t.effort - t.done);
+      t.done += unit;
+      act[t.kind] += unit;
+      state.totalEffort += unit;
+      if (t.kind === 'W') state.rework += unit;
+      if (t.feat !== null) state.feats[t.feat].spent += unit;
+      if (t.done >= t.effort - 1e-9) {
+        t.done = t.effort;
+        if (t.kind === 'A' && state.feats[t.feat].specDay === null) state.feats[t.feat].specDay = state.day;
+        if (t.fit !== undefined && t.feat !== null) state.feats[t.feat].fitReached = Math.max(state.feats[t.feat].fitReached, t.fit);
+        if (t.kind === 'R') processRelease(t);
+      }
+    }
+    freeReleases();
+
+    state.activity.push(act);
+    const val = valueNow();
+    state.value.push(val); state.effort.push(state.totalEffort);
+    if (state.firstValue === null && val > 0) state.firstValue = state.day;
+    if (state.feats.every(featureDone) && state.tasks.every(t => t.done >= t.effort - 1e-9)) {
+      state.finished = true;
+      results[life] = { first: state.firstValue, finish: state.day, effort: Math.round(state.totalEffort), rework: Math.round(state.rework), releases: state.releases };
+      if (timer) stopTimer();
+    }
+    render();
+  }
+  function valueNow() { return state.feats.reduce((s, f) => s + (f.released && f.correct && !f.fixing ? f.fit : 0), 0) / N; }
+
+  // ---------- flow diagrams ----------
+  const KC = { A: 'var(--k-a)', D: 'var(--k-d)', B: 'var(--k-b)', T: 'var(--k-t)', R: 'var(--k-r)' };
+  const KN = { A: 'Analysis', D: 'Design', B: 'Build', T: 'Test', R: 'Release' };
+  function box(x, y, w, h, k, label) {
+    const f = KC[k], txt = label === undefined ? (w < 46 && k === 'A' ? 'Analyse' : KN[k]) : label;
+    return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="4" fill="${f}"/>` +
+      `<text x="${x + w / 2}" y="${y + h / 2 + 4}" text-anchor="middle" font-size="${w < 46 ? 9.5 : 11.5}" font-weight="500" fill="#fff"${w < 46 && txt.length > 5 ? ` textLength="${w - 6}" lengthAdjust="spacingAndGlyphs"` : ''}>${txt}</text>`;
+  }
+  function arrow(x1, y1, x2, y2) { return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--muted)" stroke-width="1.4" marker-end="url(#ah)"/>`; }
+  function note(x, y, t, anchor) { return `<text x="${x}" y="${y}" font-size="10.5" fill="var(--muted)" text-anchor="${anchor || 'start'}">${t}</text>`; }
+  function users(x, y) { return `<circle cx="${x}" cy="${y - 4}" r="3.2" fill="none" stroke="var(--muted)" stroke-width="1.3"/><path d="M${x - 5.5} ${y + 5} a5.5 5.5 0 0 1 11 0" fill="none" stroke="var(--muted)" stroke-width="1.3"/>`; }
+  function chain(x, y, keys, w, h, gap) {
+    let out = '', cx = x;
+    keys.forEach((k, i) => {
+      out += box(cx, y, w, h, k);
+      if (i < keys.length - 1) { out += arrow(cx + w + 1, y + h / 2, cx + w + gap - 2, y + h / 2); cx += w + gap; }
+    });
+    return { svg: out, end: cx + w };
+  }
+  function diagram(kind) {
+    const H = 170, defs = `<defs><marker id="ah" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="var(--muted)"/></marker></defs>`;
+    const axis = `<line x1="16" y1="${H - 14}" x2="664" y2="${H - 14}" stroke="var(--line)" marker-end="url(#ah)"/>` + note(16, H - 2, 'time');
+    let out = defs;
+    if (kind === 'waterfall') {
+      const w = 118, h = 26;
+      ['A', 'D', 'B', 'T', 'R'].forEach((k, i) => {
+        const x = 20 + i * 126, y = 12 + i * 24;
+        out += box(x, y, w, h, k);
+        if (i < 4) out += arrow(x + w, y + h / 2, x + 126, y + 24 + h / 2);
+      });
+      out += note(20, 52, 'all 20 features') + note(146, 76, 'all 20 features') + note(272, 100, 'all 20 features') + note(398, 124, 'all 20 features');
+      out += users(660, 136) + note(650, 148, 'once', 'end');
+      out += note(20, 138, 'Anything found wrong after the release is fixed and released again.');
+    } else if (kind === 'incremental') {
+      const w = 38, h = 22, gap = 5;
+      for (let r = 0; r < 4; r++) {
+        const x = 14 + r * 140, y = 10 + r * 34;
+        const c = chain(x, y, ['A', 'D', 'B', 'T'], w, h, gap);
+        out += c.svg + box(c.end + 4, y, 40, h, 'R') + users(c.end + 56, y + 15);
+        out += note(x, y + h + 11, `Slice ${r + 1}: five features`);
+      }
+    } else if (kind === 'agile') {
+      // Prioritised backlog on the left, then sprint timeboxes. Inside each, activities overlap; release closes the box; feedback feeds the next plan.
+      for (let i = 0; i < 5; i++) out += `<rect x="${18 + i * 2}" y="${34 + i * 13}" width="46" height="11" rx="2" fill="var(--f-prog)" stroke="var(--line)"/>`;
+      out += note(14, 26, 'Backlog,') + note(14, 116, 'prioritised');
+      const fx = [90, 290, 490], fw = 176, fh = 108, fy = 16, iw = 132;
+      const rows = [['A', 0, 0.34], ['D', 0.12, 0.58], ['B', 0.24, 0.9], ['T', 0.46, 1]];
+      out += arrow(68, 66, fx[0] - 3, 66);
+      fx.forEach((x, i) => {
+        out += `<rect x="${x}" y="${fy}" width="${fw}" height="${fh}" rx="6" fill="none" stroke="var(--line)" stroke-dasharray="4 3"/>`;
+        out += `<text x="${x + 8}" y="${fy + 15}" font-size="11" font-weight="600" fill="var(--ink)">Sprint ${i + 1}</text>` + note(x + fw - 8, fy + 15, '10 days', 'end');
+        out += note(x + 8, fy + 27, 'Plan: fixes first, then what fits');
+        rows.forEach(([k, a, b], r) => {
+          const bx = x + 8 + a * iw, bw = (b - a) * iw, by = fy + 33 + r * 14;
+          out += box(bx, by, bw, 12, k);
+        });
+        const rx = x + 8 + iw + 6;
+        out += box(rx, fy + 33, 22, 54, 'R', '') +
+          `<text transform="translate(${rx + 15} ${fy + 60}) rotate(-90)" text-anchor="middle" font-size="9.5" font-weight="500" fill="#fff">Release</text>`;
+        out += users(x + fw - 12, fy + 100);
+        out += note(x + 8, fy + 100, 'users see it every sprint');
+        if (i < 2) {
+          const nx = fx[i + 1];
+          out += `<path d="M${rx + 23} ${fy + 40} C ${rx + 40} ${fy - 12}, ${nx + 30} ${fy - 12}, ${nx + 40} ${fy + 18}" fill="none" stroke="var(--muted)" stroke-width="1.4" marker-end="url(#ah)"/>`;
+          if (i === 0) out += note((rx + nx + 60) / 2, fy - 3, 'feedback into the next plan', 'middle');
+        }
+      });
+      out += `<path d="M${fx[2] + fw - 12} ${fy + fh + 2} C ${fx[2] + fw - 12} ${fy + fh + 22}, 60 ${fy + fh + 22}, 44 ${fy + fh - 4}" fill="none" stroke="var(--muted)" stroke-width="1.4" marker-end="url(#ah)"/>`;
+      out += note(380, fy + fh + 24, 'every release re-orders the backlog; inside a sprint, analysis, design, build and test overlap', 'middle');
+      out += note(fx[2] + fw + 3, fy + fh / 2 + 4, '…');
+    } else {
+      const w = 96, h = 26, y = 14;
+      const c = chain(18, y, ['A', 'D', 'B', 'T'], w, h, 14);
+      out += c.svg + arrow(c.end + 1, y + h / 2, c.end + 12, y + h / 2) + box(c.end + 14, y, 88, h, 'R');
+      for (let i = 0; i < 20; i++) {
+        const x = 30 + i * 32;
+        out += `<rect x="${x}" y="76" width="22" height="18" rx="3" fill="var(--f-prog)" stroke="var(--line)"/>` +
+          `<text x="${x + 11}" y="89" text-anchor="middle" font-size="9.5" fill="var(--ink)">${i + 1}</text>` +
+          `<line x1="${x + 11}" y1="96" x2="${x + 11}" y2="108" stroke="var(--muted)" stroke-width="1.2" marker-end="url(#ah)"/>` +
+          users(x + 11, 120);
+      }
+      out += note(18, 66, 'Features flow one at a time, up to four in progress. Each is released as soon as it is ready.');
+      out += note(18, 140, '20 releases, feedback within days of each.');
+    }
+    return out + axis;
+  }
+
+  // ---------- render ----------
+  function render() {
+    $('flow').innerHTML = diagram(life);
+    $('flowbadge').textContent = LIFE[life].name;
+    $('m-val').textContent = Math.round(valueNow() * 100) + '%';
+    $('m-first').textContent = state.firstValue === null ? '–' : 'day ' + state.firstValue;
+    $('m-blind').textContent = state.blindSpend === null ? '–' : Math.round(state.blindSpend);
+    $('m-eff').textContent = Math.round(state.totalEffort);
+    $('m-rw').textContent = Math.round(state.rework);
+    $('m-rel').textContent = state.releases;
+    $('dayline').textContent = `Day ${state.day}` + (state.finished ? ' · finished' : state.day >= MAXDAY ? ' · stopped at day limit' : '');
+    const badge = $('lifebadge'); badge.textContent = LIFE[life].name + (state.finished ? ' · finished day ' + state.day : ' · day ' + state.day);
+    badge.classList.toggle('done', state.finished);
+    $('lifedesc').textContent = LIFE[life].desc;
+    $('worldline').textContent = 'Draw ' + settings.seed;
+    document.querySelectorAll('[data-life]').forEach(b => b.classList.toggle('active', b.dataset.life === life));
+    renderFeatures(); drawTimeline(); drawChart(); renderTable();
+  }
+  function renderFeatures() {
+    const box = $('features'); box.innerHTML = '';
+    for (const f of state.feats) {
+      const d = document.createElement('div');
+      const cls = f.fixing ? 'fix' : (f.released && f.wrong ? 'wrong' : (f.released && f.correct ? 'ok' : ''));
+      d.className = 'feat ' + cls;
+      const pct = Math.min(100, Math.round(100 * f.spent / 6.5));
+      d.innerHTML = `<div class="fill" style="height:${f.released ? Math.max(pct, 100 * f.fit) : pct}%"></div><span>${f.id + 1}</span>`;
+      d.title = `Feature ${f.id + 1}: ${f.released ? (f.fixing ? 'being fixed' : f.wrong ? 'live but wrong' : 'live, ' + Math.round(f.fit * 100) + '% complete') : pct + '% built'}`;
+      box.appendChild(d);
+    }
+  }
+  function drawTimeline() {
+    const W = 680, H = 70, L = 8, R = 8, T = 6, B = 18;
+    const days = Math.max(60, state.activity.length);
+    const cw = (W - L - R) / days;
+    const cols = ['A', 'D', 'B', 'T', 'R', 'W'];
+    const colour = { A: 'var(--k-a)', D: 'var(--k-d)', B: 'var(--k-b)', T: 'var(--k-t)', R: 'var(--k-r)', W: 'var(--k-w)' };
+    let out = '';
+    state.activity.forEach((a, i) => {
+      let y = H - B;
+      for (const k of cols) {
+        if (!a[k]) continue;
+        const h = (H - T - B) * a[k] / TEAM;
+        out += `<rect x="${(L + i * cw).toFixed(2)}" y="${(y - h).toFixed(2)}" width="${(Math.max(cw, 0.8) + 0.4).toFixed(2)}" height="${h.toFixed(2)}" fill="${colour[k]}" shape-rendering="crispEdges"/>`;
+        y -= h;
+      }
+    });
+    if (life === 'agile') for (let d = SPRINT; d < days; d += SPRINT) out += `<line x1="${(L + d * cw).toFixed(1)}" y1="${T}" x2="${(L + d * cw).toFixed(1)}" y2="${H - B}" stroke="var(--muted)" stroke-dasharray="2 2" opacity="0.7"/>`;
+    out += `<line x1="${L}" y1="${H - B}" x2="${W - R}" y2="${H - B}" stroke="var(--line)"/>`;
+    for (let d = 0; d < days * 0.94; d += days <= 100 ? 20 : 50) out += `<text x="${L + d * cw}" y="${H - 5}" font-size="10" fill="var(--muted)" text-anchor="${d === 0 ? 'start' : 'middle'}">${d}</text>`;
+    out += `<text x="${W - R}" y="${H - 5}" font-size="10" fill="var(--muted)" text-anchor="end">days</text>`;
+    $('timeline').innerHTML = out;
+  }
+  function drawChart() {
+    const W = 680, H = 240, L = 40, R = 12, T = 12, B = 26;
+    const n = state.value.length;
+    const days = Math.max(60, n - 1);
+    const effPct = state.effort.map(e => 100 * e / BASE);
+    const maxY = Math.max(100, ...effPct) * 1.05;
+    const x = i => L + i * (W - L - R) / days;
+    const y = v => T + (H - T - B) * (1 - v / maxY);
+    const path = (arr, f) => arr.map((v, i) => (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(f(v)).toFixed(1)).join(' ');
+    let out = '';
+    [0, 50, 100].forEach(v => { out += `<line x1="${L}" y1="${y(v)}" x2="${W - R}" y2="${y(v)}" stroke="var(--line)" stroke-dasharray="${v === 100 ? '4 3' : ''}"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="var(--muted)">${v}%</text>`; });
+    if (n > 1) {
+      out += `<path d="${path(effPct, v => v)}" fill="none" stroke="var(--eff)" stroke-width="2"/>`;
+      out += `<path d="${path(state.value, v => v * 100)}" fill="none" stroke="var(--val)" stroke-width="3"/>`;
+    }
+    out += `<line x1="${L}" y1="${H - B}" x2="${W - R}" y2="${H - B}" stroke="var(--line)"/>`;
+    out += `<text x="${L}" y="${H - 8}" font-size="11" fill="var(--muted)">Day 0</text><text x="${W - R}" y="${H - 8}" text-anchor="end" font-size="11" fill="var(--muted)">Day ${days}</text>`;
+    $('chart').innerHTML = out;
+  }
+  function renderTable() {
+    const tb = $('results').querySelector('tbody'); tb.innerHTML = '';
+    for (const k of Object.keys(LIFE)) {
+      const r = results[k];
+      const tr = document.createElement('tr'); if (k === life) tr.className = 'current';
+      const c = v => v === undefined || v === null ? '–' : v;
+      tr.innerHTML = `<td>${LIFE[k].name}</td><td class="num">${r ? 'day ' + c(r.first) : '–'}</td><td class="num">${r ? 'day ' + r.finish : '–'}</td><td class="num">${r ? r.effort : '–'}</td><td class="num">${r ? r.rework : '–'}</td><td class="num">${r ? r.releases : '–'}</td>`;
+      tb.appendChild(tr);
+    }
+  }
+
+  // ---------- controls ----------
+  function stopTimer() { clearInterval(timer); timer = null; $('play').textContent = 'Play'; }
+  function play() {
+    if (timer) { stopTimer(); return; }
+    if (state.finished) return;
+    const sp = +$('speed').value;
+    if (sp === 0) { while (!state.finished && state.day < MAXDAY) tick(); return; }
+    timer = setInterval(tick, sp); $('play').textContent = 'Pause';
+  }
+  $('play').addEventListener('click', play);
+  $('step').addEventListener('click', () => { if (timer) stopTimer(); tick(); });
+  $('reset').addEventListener('click', () => { if (timer) stopTimer(); reset(); });
+  $('speed').addEventListener('change', () => { if (timer) { clearInterval(timer); timer = setInterval(tick, +$('speed').value || 1); } });
+  document.querySelectorAll('[data-life]').forEach(b => b.addEventListener('click', () => { if (timer) stopTimer(); life = b.dataset.life; reset(); }));
+
+  function worldChanged() { for (const k in results) delete results[k]; if (timer) stopTimer(); reset(); }
+  $('unc').addEventListener('input', e => { settings.unc = +e.target.value / 100; $('unc-v').textContent = e.target.value + '%'; worldChanged(); });
+  $('drift').addEventListener('input', e => { settings.drift = +e.target.value / 100; $('drift-v').textContent = (+e.target.value).toFixed(1) + '% per day'; worldChanged(); });
+  $('relcost').addEventListener('input', e => { settings.relcost = +e.target.value; $('relcost-v').textContent = e.target.value + ' person-days'; worldChanged(); });
+  $('newworld').addEventListener('click', () => { settings.seed++; worldChanged(); });
+  $('cleartable').addEventListener('click', () => { for (const k in results) delete results[k]; renderTable(); });
+
+  reset();
+})();
+</script>
+</body>
+</html>
