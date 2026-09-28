@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AI agents across the delivery lifecycle</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #eef0f3; --panel: #ffffff; --ink: #1c2330; --muted: #5d6675; --line: #d5d9e0;
+    --accent: #2456a6; --accent-ink: #ffffff; --bad: #c9352b; --good: #3f9c63; --warn: #b7791f;
+    --s-a: #6b8fd6; --s-d: #8f6bd6; --s-b: #3d9c8a; --s-r: #b5608f; --s-t: #d99a2b; --s-l: #5a6475;
+    --agent: #1c2330; --agent-ink: #ffffff;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #161a21; --panel: #202631; --ink: #e8ebf0; --muted: #9aa3b2; --line: #343c4a;
+      --accent: #7ea2e6; --accent-ink: #10151d; --bad: #ff7a6e; --good: #5cc587; --warn: #e0b04a;
+      --s-l: #8a93a3; --agent: #e8ebf0; --agent-ink: #161a21;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #161a21; --panel: #202631; --ink: #e8ebf0; --muted: #9aa3b2; --line: #343c4a;
+    --accent: #7ea2e6; --accent-ink: #10151d; --bad: #ff7a6e; --good: #5cc587; --warn: #e0b04a;
+    --s-l: #8a93a3; --agent: #e8ebf0; --agent-ink: #161a21;
+  }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  *, *::before, *::after { box-sizing: inherit; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: "IBM Plex Sans", "Segoe UI", Helvetica, Arial, sans-serif; font-size: 15px; line-height: 1.45; }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 0 24px; }
+  @media (max-width: 700px) { .wrap { padding: 0 12px; } }
+  header { padding: 22px 0 8px; }
+  h1 { font-size: 1.5rem; font-weight: 600; margin: 0 0 4px; letter-spacing: -0.01em; }
+  header p { margin: 0 0 12px; color: var(--muted); max-width: 78ch; }
+  ol.steps { display: flex; flex-wrap: wrap; gap: 8px 22px; margin: 0; padding-left: 20px; font-size: 0.92rem; }
+  ol.steps li { padding-left: 2px; }
+  h2 { font-size: 0.95rem; font-weight: 600; margin: 0 0 10px; display: flex; align-items: center; gap: 6px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+  .card { padding: 14px; }
+  section { margin-top: 16px; }
+  button, select { font: inherit; font-size: 0.9rem; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button:focus-visible, select:focus-visible, .chip:focus-visible, .col:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 500; }
+  button.small { font-size: 0.8rem; padding: 3px 8px; }
+  .hint { font-size: 0.8rem; color: var(--muted); margin: 4px 0 0; }
+
+  /* top bar */
+  .topbar { display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px; padding: 14px; }
+  @media (max-width: 900px) { .topbar { grid-template-columns: 1fr; } }
+  .tray { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 40px; padding: 6px; border: 1px dashed var(--line); border-radius: 8px; }
+  .tray.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+  .trayhead { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 6px; flex-wrap: wrap; }
+  .trayhead b { font-weight: 600; }
+  .scenarios { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+  @media (max-width: 520px) { .scenarios { grid-template-columns: 1fr; } }
+  .scenarios button { text-align: left; display: flex; flex-direction: column; justify-content: flex-start; align-items: flex-start; gap: 2px; }
+  .topbar > div { min-width: 0; }
+  .scenarios small { display: block; font-size: 0.76rem; opacity: 0.8; font-weight: 400; }
+  .scenarios button.active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 500; }
+  .runrow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .dayline { font-size: 0.9rem; margin-top: 8px; font-variant-numeric: tabular-nums; }
+
+  .chip { width: 34px; height: 28px; border-radius: 7px; background: var(--agent); color: var(--agent-ink); display: inline-flex; align-items: center; justify-content: center; cursor: grab; touch-action: none; user-select: none; border: 0; padding: 0; }
+  .chip svg { display: block; pointer-events: none; }
+  .chip.ghost { position: fixed; z-index: 50; pointer-events: none; transform: translate(-50%, -50%) scale(1.1); box-shadow: 0 6px 16px rgba(0,0,0,.25); }
+  .chip.empty { background: transparent; border: 1px dashed var(--line); cursor: default; }
+
+  /* board */
+  .boardwrap { overflow-x: auto; padding: 14px; }
+  .board { display: grid; grid-template-columns: repeat(6, minmax(158px, 1fr)); gap: 10px; min-width: 980px; }
+  .col { border: 1px solid var(--line); border-radius: 8px; background: var(--bg); display: flex; flex-direction: column; cursor: pointer; position: relative; }
+  .col.sel { box-shadow: 0 0 0 2px var(--accent); }
+  .colhead { padding: 8px 10px 6px; border-top: 5px solid var(--c); border-radius: 8px 8px 0 0; }
+  .colhead b { font-weight: 600; display: block; }
+  .who { font-size: 0.76rem; color: var(--muted); }
+  .capline { padding: 0 10px; font-size: 0.8rem; color: var(--muted); }
+  .capline b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .slow { display: inline-block; margin-top: 3px; font-size: 0.72rem; font-weight: 600; color: var(--bad); border: 1px solid var(--bad); border-radius: 999px; padding: 0 7px; }
+  .pill { margin: 6px 10px 0; font-size: 0.78rem; font-weight: 500; border-radius: 6px; padding: 3px 7px; background: color-mix(in srgb, var(--muted) 12%, transparent); color: var(--muted); }
+  .pill.pile { background: color-mix(in srgb, var(--bad) 16%, transparent); color: var(--bad); }
+  .pill.idle { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
+  .pill.flow { background: color-mix(in srgb, var(--good) 16%, transparent); color: var(--good); }
+  .row { display: flex; align-items: center; gap: 5px; padding: 6px 10px 0; flex-wrap: wrap; }
+  .lbl { font-size: 0.76rem; color: var(--muted); }
+  .busy { margin-left: auto; font-size: 0.76rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .person { color: var(--c); display: inline-flex; }
+  .zone { margin: 6px 10px 0; min-height: 40px; border: 1px dashed var(--line); border-radius: 7px; padding: 5px; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; background: var(--panel); }
+  .zone.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--panel)); }
+  .zonehint { font-size: 0.74rem; color: var(--muted); padding-left: 3px; }
+  .work { padding: 6px 10px 10px; margin-top: auto; }
+  .dots { display: flex; flex-wrap: wrap; gap: 3px; min-height: 12px; margin: 2px 0 5px; }
+  .dot { width: 9px; height: 9px; border-radius: 2px; }
+  .dot.wait { border: 1.5px solid var(--muted); }
+  .dot.agent { background: var(--agent); }
+  .dot.drafted { background: linear-gradient(135deg, var(--agent) 50%, transparent 50%); border: 1.5px solid var(--agent); }
+  .dot.people { background: var(--c); }
+  .dot.assisted { background: var(--c); box-shadow: 0 0 0 1.5px var(--agent); }
+  .more { font-size: 0.7rem; color: var(--muted); }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 0.78rem; color: var(--muted); margin-top: 10px; align-items: center; }
+  .legend .dot { display: inline-block; vertical-align: -1px; margin-right: 4px; --c: var(--s-b); }
+
+  /* metrics */
+  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  @media (max-width: 900px) { .metrics { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 560px) { .metrics { grid-template-columns: repeat(2, 1fr); } }
+  .metric { padding: 12px 14px; }
+  .metric .n { font-size: 1.45rem; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .metric .l { font-size: 0.82rem; color: var(--muted); margin-top: 2px; }
+  .metric .s { font-size: 0.76rem; color: var(--muted); }
+
+  /* detail */
+  .detailhead { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: baseline; }
+  .detailhead h2 { margin: 0; }
+  .detailnote { font-size: 0.88rem; color: var(--muted); margin: 6px 0 12px; max-width: 90ch; }
+  .buckets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  @media (max-width: 860px) { .buckets { grid-template-columns: 1fr; } }
+  .bucket { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--bg); }
+  .bucket h3 { font-size: 0.86rem; font-weight: 600; margin: 0 0 6px; display: flex; align-items: center; gap: 6px; }
+  .bucket ul { margin: 0; padding-left: 18px; font-size: 0.88rem; }
+  .bucket li { margin-bottom: 4px; }
+  .bucket.focus { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, var(--bg)); }
+  .new { font-size: 0.7rem; font-weight: 600; color: var(--accent); border: 1px solid var(--accent); border-radius: 999px; padding: 0 6px; margin-left: 4px; vertical-align: 1px; }
+  .sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+  .charts { display: grid; grid-template-columns: 1fr; gap: 16px; }
+  .chartnote { font-size: 0.8rem; color: var(--muted); margin: -4px 0 8px; }
+  svg.chart { width: 100%; height: auto; display: block; }
+  .clegend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 0.78rem; color: var(--muted); margin-top: 6px; }
+  .clegend i { display: inline-block; width: 12px; height: 12px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+
+  .tablewrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.86rem; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; vertical-align: top; }
+  th { font-weight: 600; color: var(--muted); font-size: 0.78rem; }
+  td.num, th.num { text-align: right; }
+  td.best { background: color-mix(in srgb, var(--good) 22%, transparent); font-weight: 600; }
+  td.worst { background: color-mix(in srgb, var(--bad) 16%, transparent); font-weight: 600; }
+  .tablekey { display: flex; gap: 14px; font-size: 0.78rem; color: var(--muted); margin-top: 8px; }
+  .tablekey i { display: inline-block; width: 12px; height: 12px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+  .flag { font-size: 0.72rem; color: var(--warn); }
+  small.up { color: var(--good); } small.down { color: var(--bad); } small.same { color: var(--muted); }
+  td.gain { color: var(--good); font-weight: 600; } td.loss { color: var(--bad); font-weight: 600; }
+  tr.ref td { background: color-mix(in srgb, var(--muted) 10%, transparent); }
+  tr.grp td { font-size: 0.8rem; font-weight: 600; color: var(--muted); padding-top: 14px; border-bottom: 1px solid var(--line); }
+  .setlbl { font-size: 0.74rem; color: var(--muted); }
+
+  .prose ol, .prose ul { margin: 0; padding-left: 20px; }
+  .prose li { margin-bottom: 8px; max-width: 86ch; }
+  .prose b { font-weight: 600; }
+  details summary { cursor: pointer; font-weight: 600; font-size: 0.95rem; }
+  .setgroups { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-top: 12px; }
+  @media (max-width: 800px) { .setgroups { grid-template-columns: 1fr; } }
+  .setgroup { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; background: var(--bg); }
+  .setgroup h3 { font-size: 0.88rem; font-weight: 600; margin: 0 0 4px; }
+  .setgroup select { width: 100%; }
+  label.field { display: flex; align-items: center; font-size: 0.86rem; margin: 12px 0 3px; }
+  label.field .val { margin-left: auto; padding-left: 8px; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; font-size: 0.82rem; }
+  input[type=range] { width: 100%; accent-color: var(--accent); margin: 0; }
+  .help { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; margin-left: 6px; border-radius: 50%; border: 1px solid var(--muted); color: var(--muted); font-size: 0.7rem; font-weight: 600; cursor: help; position: relative; flex: none; }
+  .help:hover, .help:focus { border-color: var(--accent); color: var(--accent); outline: none; }
+  .help::after { content: attr(data-tip); position: absolute; left: 0; top: 22px; z-index: 5; width: 250px; background: var(--ink); color: var(--bg); font-size: 0.8rem; font-weight: 400; line-height: 1.35; padding: 8px 10px; border-radius: 6px; box-shadow: 0 4px 14px rgba(0,0,0,.2); white-space: normal; opacity: 0; pointer-events: none; transition: opacity .12s; }
+  .help.right::after { left: auto; right: 0; }
+  .help:hover::after, .help:focus::after { opacity: 1; }
+  .settings { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px 18px; margin-top: 12px; }
+  .settings label { display: block; font-size: 0.86rem; margin-bottom: 3px; }
+  .settings select { width: 100%; }
+  footer { height: 40px; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>AI agents across the delivery lifecycle</h1>
+  <p>An agile team of eight works in two-week sprints. Place AI agents in the stages of the lifecycle and see where work flows, where it piles up, and what people spend their time on once the agents arrive.</p>
+  <ol class="steps">
+    <li>Pick a scenario, or drag an agent onto a stage.</li>
+    <li>Press Play.</li>
+    <li>Watch where work piles up and where agents wait.</li>
+    <li>Click a stage to see what people now focus on.</li>
+    <li>Move agents until the work flows.</li>
+  </ol>
+</header>
+
+<section class="panel topbar">
+  <div>
+    <div class="trayhead"><h2 style="margin:0">Agents</h2><span class="hint" id="traycount" style="margin:0"></span></div>
+    <div class="tray" id="tray" data-drop="tray" aria-label="Unplaced agents"></div>
+    <h2 style="margin-top:12px">Scenarios</h2>
+    <div class="scenarios">
+      <button data-preset="none">No agents<small>The team as it works today</small></button>
+      <button data-preset="build">Coding agents only<small>Two agents supporting the developers, a common first step</small></button>
+      <button data-preset="balanced">Balanced<small>Six agents: enough to support every person from Analysis to Test</small></button>
+      <button data-preset="everywhere">Agents everywhere<small>Three agents in every stage, 18 in total</small></button>
+    </div>
+    <p class="hint" id="scenline"></p>
+  </div>
+  <div>
+    <h2>Run</h2>
+    <div class="runrow">
+      <button id="play" class="primary">Play</button>
+      <button id="step">Step 1 day</button>
+      <button id="reset">Reset</button>
+      <select id="speed" aria-label="Speed"><option value="500">Slow</option><option value="200" selected>Normal</option><option value="60">Fast</option><option value="0">Instant</option></select>
+      <select id="runFor" aria-label="Run length"><option value="3">3 sprints</option><option value="6" selected>6 sprints</option><option value="12">12 sprints</option><option value="0">Continuous</option></select>
+    </div>
+    <div class="dayline" id="dayline"></div>
+    <p class="hint">You can move agents while it runs. A run that finishes is added to the comparison table.</p>
+  </div>
+</section>
+
+<section class="panel boardwrap">
+  <div class="board" id="board"></div>
+  <div class="legend">
+    <span><span class="dot wait"></span>waiting</span>
+    <span><span class="dot people"></span>people working</span>
+    <span><span class="dot assisted"></span>people working with agent support</span>
+  </div>
+</section>
+
+<section class="metrics" aria-label="Measures">
+  <div class="panel metric"><div class="n" id="m-vel">–</div><div class="l">Finished last sprint</div><div class="s" id="m-vel-s">items finished</div></div>
+  <div class="panel metric"><div class="n" id="m-cap">10</div><div class="l">The team can finish</div><div class="s" id="m-cap-s">items a sprint</div></div>
+  <div class="panel metric"><div class="n" id="m-sprint">–</div><div class="l">This sprint</div><div class="s" id="m-sprint-s">finished of planned</div></div>
+  <div class="panel metric"><div class="n" id="m-lead">–</div><div class="l">Lead time</div><div class="s">days from analysis to release</div></div>
+  <div class="panel metric"><div class="n" id="m-people">7.5</div><div class="l">People time per item</div><div class="s">person-days; 7.5 without agents</div></div>
+  <div class="panel metric"><div class="n" id="m-agents">–</div><div class="l">Agents busy</div><div class="s">share of agent support in use</div></div>
+  <div class="panel metric"><div class="n" id="m-cpi">–</div><div class="l">Cost per item</div><div class="s" id="m-cpi-s">£4,800 without agents</div></div>
+  <div class="panel metric"><div class="n" id="m-spend">–</div><div class="l">Agent spend last sprint</div><div class="s" id="m-spend-s">running cost plus usage</div></div>
+</section>
+
+<section class="panel card" id="detail"></section>
+
+<section class="charts">
+  <div class="panel card">
+    <h2>Items finished each sprint</h2>
+    <svg class="chart" id="velchart" viewBox="0 0 1200 230" role="img" aria-label="Items finished each sprint"></svg>
+    <div class="clegend"><span><i style="background:var(--accent)"></i>finished</span><span><i style="border:1.5px dashed var(--muted)"></i>planned</span><span><i style="border:1.5px dashed var(--good)"></i>taken on because there was spare capacity</span><span><i style="border-top:2px dashed var(--ink);height:0;border-radius:0;opacity:.6"></i>without agents</span></div>
+  </div>
+  <div class="panel card">
+    <h2>Work waiting in each stage</h2>
+    <p class="chartnote">Items waiting to be started in each stage, shown as a three-day average; the figures on the right are today's. Because items vary in size, some waiting is normal. A small, steady queue in front of the slowest stage keeps it busy. A line that keeps rising shows work piling up.</p>
+    <svg class="chart" id="waitchart" viewBox="0 0 1200 340" role="img" aria-label="Work waiting in each stage"></svg>
+  </div>
+</section>
+
+<section class="panel card">
+  <div class="detailhead"><h2>Your runs</h2><button class="small" id="clearruns">Clear</button></div>
+  <div class="tablewrap"><table id="runs">
+    <thead><tr><th>Agents placed</th><th class="num">Items a sprint</th><th class="num">Change</th><th class="num">Lead time, days</th><th class="num">People time per item</th><th class="num">Agents busy</th><th class="num">Waiting at end</th><th class="num">Cost per item</th><th class="num">Agent spend a sprint</th></tr></thead>
+    <tbody></tbody>
+  </table></div>
+  <div class="tablekey"><span><i style="background:color-mix(in srgb, var(--good) 40%, transparent)"></i>best</span><span><i style="background:color-mix(in srgb, var(--bad) 32%, transparent)"></i>worst</span></div>
+  <p class="hint">Each run records the settings it used. Items a sprint, cost per item and agent spend are averages over the whole run. Every run starts with the team already working steadily without agents, so the first sprint shows the change as the agents arrive. Change is against the same team without agents, under the same settings. Cost per item is people plus agents, divided by items finished.</p>
+</section>
+
+<section class="panel card">
+  <h2>Business view: what each run is worth<span class="help" tabindex="0" role="note" data-tip="Each finished run compared with the same team and project with no agents, under the settings that run used. Runs are grouped by settings, each group with its own reference row. Figures are per quarter, taken as six two-week sprints. Value uses the value of one item set in Simulator settings.">?</span></h2>
+  <p class="hint" id="biz-empty" style="margin:0 0 8px">Finish a run to see how it compares with the team working without agents.</p>
+  <svg class="chart" id="bizchart" viewBox="0 0 640 60" role="img" aria-label="Change against no agents for each run"></svg>
+  <div class="clegend"><span><i style="background:var(--good)"></i>better than no agents</span><span><i style="background:var(--bad)"></i>worse than no agents</span></div>
+  <div class="tablewrap" style="margin-top:12px"><table id="biz">
+    <thead><tr><th>Run</th><th class="num">Items a quarter</th><th class="num">Lead time, days</th><th class="num">Cost per item</th><th class="num">Spend a quarter</th><th class="num">Value delivered a quarter</th><th class="num">Net gain a quarter<span class="help right" tabindex="0" role="note" data-tip="Extra value delivered, less extra spend, compared with no agents. Positive means the agents paid for themselves and more.">?</span></th><th class="num">Return on agent spend<span class="help right" tabindex="0" role="note" data-tip="Net gain divided by what was spent on agents. 1.0 means every pound spent on agents came back with one pound of gain on top.">?</span></th></tr></thead>
+    <tbody></tbody>
+  </table></div>
+  <p class="hint">A quarter is six two-week sprints. Figures in brackets are the change against no agents. Value uses <span id="biz-value"></span> per item, set in Simulator settings.</p>
+</section>
+
+<section class="panel card prose">
+  <h2>What to look for</h2>
+  <ol>
+    <li><b>Agents in one stage move the problem.</b> Put coding agents in Build only. Build becomes faster, but Review becomes the slowest stage, and agent-written code takes longer to review and test. The team finishes fewer items than before, and each costs about a fifth more.</li>
+    <li><b>The team only gains what its slowest stage gains.</b> Build is set to +60%, yet Balanced finishes about 12 items a sprint, not 16. Review is set to +40% and has 15% more work per item from agent-written code, so it can take only about 12 a sprint, and that sets the pace for everyone.</li>
+    <li><b>Enough agents, not more.</b> Each agent supports two people. Build needs two agents before all three developers get the gain; a stage with one person needs one. Agents beyond that have no one to support.</li>
+    <li><b>Spare time appears where agents work.</b> Click a stage with agents. Routine drafting moves to the agents; deciding, judging and checking stays with people, and some tasks are new.</li>
+    <li><b>Balance beats volume.</b> Balanced gives every person from Analysis to Test agent support with six agents. Agents everywhere uses 18 and finishes exactly the same, with nothing piling up, so on the board it looks just as good. But its agents are busy about one day in five, each item costs about a fifth more than in Balanced, and the business view shows almost no net gain.</li>
+  </ol>
+</section>
+
+<section class="panel card">
+  <details>
+    <summary>Simulator settings</summary>
+    <p class="hint">Changing a setting restarts the current run. Finished runs are kept, each labelled with the settings it used, so you can re-run a scenario under new settings and compare.</p>
+    <div class="setgroups">
+      <div class="setgroup">
+        <h3>Agents</h3>
+        <label class="field" for="s-avail">Agents available<span class="help" tabindex="0" role="note" data-tip="How many agents the team can place. The scenarios set this for you; Agents everywhere needs 18.">?</span><span class="val" id="s-avail-v"></span></label>
+        <input type="range" id="s-avail" min="1" max="18" step="1" value="6">
+        <label class="field" for="s-support">People one agent supports<span class="help" tabindex="0" role="note" data-tip="How many people one agent can support at once. A stage needs enough agents to support all its people before every person gets the full gain; agents beyond that have no one to support.">?</span><span class="val" id="s-support-v"></span></label>
+        <input type="range" id="s-support" min="1" max="4" step="1" value="2">
+        <label class="field" for="s-extra">Extra review and test effort<span class="help" tabindex="0" role="note" data-tip="How much more review and test effort each item needs when agents helped build it. Set to 0% to remove this effect.">?</span><span class="val" id="s-extra-v"></span></label>
+        <input type="range" id="s-extra" min="0" max="0.5" step="0.05" value="0.15">
+      </div>
+      <div class="setgroup">
+        <h3>Productivity gain with agents, by stage</h3>
+        <label class="field" for="s-gA">Analysis<span class="help" tabindex="0" role="note" data-tip="The extra work a person in this stage gets through each day with agent support, after the time spent checking what the agents produce. 0% means no gain; a negative figure means agents slow people down. Drafting stories and summarising feedback suit agents; deciding priorities does not.">?</span><span class="val" id="s-gA-v"></span></label>
+        <input type="range" id="s-gA" min="-0.2" max="1.5" step="0.05" value="0.4">
+        <label class="field" for="s-gD">Design<span class="help" tabindex="0" role="note" data-tip="The extra work a person in this stage gets through each day with agent support, after the time spent checking what the agents produce. 0% means no gain; a negative figure means agents slow people down. Draft designs and specifications suit agents; architecture decisions and risk judgements do not.">?</span><span class="val" id="s-gD-v"></span></label>
+        <input type="range" id="s-gD" min="-0.2" max="1.5" step="0.05" value="0.3">
+        <label class="field" for="s-gB">Build<span class="help" tabindex="0" role="note" data-tip="The extra work a person in this stage gets through each day with agent support, after the time spent checking what the agents produce. 0% means no gain; a negative figure means agents slow people down. The best-evidenced stage. Task studies show large gains on routine code and under 11% on complex work.">?</span><span class="val" id="s-gB-v"></span></label>
+        <input type="range" id="s-gB" min="-0.2" max="1.5" step="0.05" value="0.6">
+        <label class="field" for="s-gR">Review<span class="help right" tabindex="0" role="note" data-tip="The extra work a person in this stage gets through each day with agent support, after the time spent checking what the agents produce. 0% means no gain; a negative figure means agents slow people down. Agents can check style and common defects; judging correctness and approving changes stays with people.">?</span><span class="val" id="s-gR-v"></span></label>
+        <input type="range" id="s-gR" min="-0.2" max="1.5" step="0.05" value="0.4">
+        <label class="field" for="s-gT">Test<span class="help right" tabindex="0" role="note" data-tip="The extra work a person in this stage gets through each day with agent support, after the time spent checking what the agents produce. 0% means no gain; a negative figure means agents slow people down. Generating tests and sorting regression failures suit agents; exploratory testing does not.">?</span><span class="val" id="s-gT-v"></span></label>
+        <input type="range" id="s-gT" min="-0.2" max="1.5" step="0.05" value="0.5">
+        <label class="field" for="s-gL">Release<span class="help right" tabindex="0" role="note" data-tip="The extra work a person in this stage gets through each day with agent support, after the time spent checking what the agents produce. 0% means no gain; a negative figure means agents slow people down. Pipelines, release notes and first-line monitoring suit agents; go or no-go decisions do not.">?</span><span class="val" id="s-gL-v"></span></label>
+        <input type="range" id="s-gL" min="-0.2" max="1.5" step="0.05" value="0.4">
+      </div>
+      <div class="setgroup">
+        <h3>Costs</h3>
+        <label class="field" for="s-pcost">Cost of a person<span class="help" tabindex="0" role="note" data-tip="Fully loaded daily cost of one team member. The team of eight costs 80 times this each sprint.">?</span><span class="val" id="s-pcost-v"></span></label>
+        <input type="range" id="s-pcost" min="300" max="1000" step="50" value="600">
+        <label class="field" for="s-afix">Agent running cost<span class="help" tabindex="0" role="note" data-tip="What an agent costs each day whether busy or idle: licences, platform, monitoring and security review.">?</span><span class="val" id="s-afix-v"></span></label>
+        <input type="range" id="s-afix" min="0" max="400" step="25" value="100">
+        <label class="field" for="s-ause">Agent usage cost<span class="help" tabindex="0" role="note" data-tip="Token and compute cost for each day an agent spends supporting a busy person. An agent supporting two busy people costs twice this each day, on top of its running cost.">?</span><span class="val" id="s-ause-v"></span></label>
+        <input type="range" id="s-ause" min="0" max="200" step="10" value="50">
+        <label class="field" for="s-value">Value of one item to the business<span class="help" tabindex="0" role="note" data-tip="What one finished item is worth to the business. Used only in the business view, to turn items delivered into value. Agree a figure with the group before comparing runs.">?</span><span class="val" id="s-value-v"></span></label>
+        <input type="range" id="s-value" min="0" max="30000" step="1000" value="10000">
+      </div>
+      <div class="setgroup">
+        <h3>Work and planning</h3>
+        <label class="field" for="s-vary">Variation in item size<span class="help" tabindex="0" role="note" data-tip="Real backlog items are not all the same size. With variation, some items take much longer than average and others much less, so queues form even in a well-balanced team. Every run faces the same items, so comparisons stay fair. Set to none to see the average behaviour only.">?</span></label>
+        <select id="s-vary"><option value="0">None: every item the same size</option><option value="0.2" selected>Low</option><option value="0.4">Medium</option><option value="0.7">High</option></select>
+        <label class="field" for="s-plan">Sprint planning is based on<span class="help right" tabindex="0" role="note" data-tip="How the team decides how much to take on. The default plans on recent velocity, then takes on more items during the sprint whenever fewer than two items are waiting further down the line, so the team grows into any capacity the agents create. Planning on what the developers can build over-commits once Build is fast. Recent velocity only grows slowly, as finished work creeps above the plan. The slowest stage matches the constraint from the start.">?</span></label>
+        <select id="s-plan"><option value="pull" selected>Recent velocity, taking on more when there is spare capacity</option><option value="build">What the developers can build</option><option value="velocity">Recent velocity only</option><option value="constraint">The slowest stage</option></select>
+        <button class="small" id="s-defaults" style="margin-top:16px">Restore default settings</button>
+      </div>
+    </div>
+  </details>
+</section>
+
+<section class="panel card prose">
+  <details>
+    <summary>Model assumptions</summary>
+    <ul style="margin-top:10px">
+      <li><b>Team.</b> Eight people, each assigned to one stage so that the flow is visible: Analysis 1, Design 1, Build 3, Review 1, Test 1, Release 1. Each item needs 7.5 person-days: 1, 1, 3, 1, 1 and 0.5 in the six stages. Without agents the team finishes about 10 items a sprint, with Release as the only stage with spare capacity.</li>
+      <li><b>Sprints.</b> Ten working days. By default the team plans on its recent velocity (10 items to begin with), then takes on more items during the sprint whenever Analysis has capacity and fewer than two items are waiting in total further down the line. The team therefore grows into any capacity the agents create, but stops taking work on as soon as a queue starts to form. Other planning rules are available in Simulator settings. Unfinished items carry on into the next sprint.</li>
+      <li><b>What agents do.</b> Each stage has a productivity gain: the extra work a person in that stage gets through each day with agent support, after the time spent checking what the agents produce. Defaults are Analysis +40%, Design +30%, Build +60%, Review +40%, Test +50% and Release +40%, set in Simulator settings. Each agent supports two people; people without agent support work at the old rate. The gain is expressed as an increase in productivity, so a 50% cut in the time a task takes counts as +100%.</li>
+      <li><b>Evidence for the gains.</b> Published figures are mostly for individual coding tasks and are usually reported as time saved. Converted to productivity: McKinsey's 2023 study found time savings of 45–50% for documentation (+82% to +100% productivity), 35–45% for writing new code (+54% to +82%), 20–30% for refactoring (+25% to +43%) and under 10% for high-complexity tasks (under +11%). GitHub's 2023 experiment found a defined coding task done in 56% less time (+126%). METR's 2025 randomised trial found experienced open-source developers took 19% longer with AI tools (about −16%). The 2024 DORA report associated a 25% rise in AI adoption with a 2.1% rise in individual productivity. Stage defaults sit below the task-level figures because every stage also contains complex work and checking.</li>
+      <li><b>Agent-written code.</b> When Build uses agents, review and test effort per item rises by 15%. This is a judgement, in line with the 2024 DORA report's finding that higher AI adoption was associated with an estimated 7.2% fall in delivery stability.</li>
+      <li><b>Cost.</b> Each person costs £600 a day, fully loaded, so the team costs £48,000 a sprint and about £4,800 an item without agents. Each agent costs £100 a day to run whether busy or not, covering licences, platform, monitoring and security review, plus £50 of usage for each day it spends supporting a busy person, so up to £100 more a day when it supports two. Published figures vary widely: Anthropic reports about $13 per developer per active day for assisted use, heavy agentic use runs to $500–$2,000 per engineer a month, and a 2026 Gartner Peer Insights survey found 23% of technology leaders spending $200–$500 per developer a month on coding-agent tokens and 6% over $2,000. Seat and token costs are often only part of the full cost once platform and security work are included. The defaults sit towards the heavy end because these agents run autonomously all day.</li>
+      <li><b>Business view.</b> Each run is compared with the same team and project with no agents, simulated under the settings that run used; runs with different settings are grouped separately. A quarter is six two-week sprints. Value delivered is items finished times the value of one item, which is a setting because it differs by organisation; every item is treated as worth the same. Net gain is extra value less extra spend. Return on agent spend is net gain divided by spend on agents.</li>
+      <li><b>Item size.</b> Items vary in size, so some take much longer than average and others much less. By default the variation is low: most items fall within about a third either side of the average. Variation makes queues form even in a well-balanced team, so the team without agents finishes a little under 10 items a sprint and some work waits. Each item's size is fixed, so every run and every scenario faces the same items. Set the variation to none in Simulator settings to see the average behaviour only.</li>
+      <li><b>Starting point.</b> Every run starts with the team already working steadily without agents, with work in progress in every stage. Sprint 1 therefore shows the change as the agents arrive, and every sprint counts in the averages.</li>
+      <li><b>Flow.</b> The model works in quarter-day steps. An item moves at most one stage a step, and a person gives each item at most a quarter of a day per step, so a person who finishes early moves on to the next item. Work is taken in arrival order.</li>
+      <li><b>Not modelled.</b> Defects that reach users, rework, people moving between stages, learning over time, and differences between items.</li>
+      <li><b>Use.</b> The numbers are for discussion, not forecasting. The pattern is what matters: where the constraint sits, and how people's work changes.</li>
+    </ul>
+  </details>
+</section>
+<footer></footer>
+</div>
+
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  const SPRINT = 10, EPS = 1e-9;
+  const BOT = '<svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true"><line x1="8" y1="2.6" x2="8" y2="5" stroke="currentColor" stroke-width="1.3"/><circle cx="8" cy="2.3" r="1.1" fill="currentColor"/><rect x="2.8" y="5" width="10.4" height="8.2" rx="2.2" fill="currentColor"/><circle cx="6.1" cy="9.1" r="1.15" fill="var(--agent)"/><circle cx="9.9" cy="9.1" r="1.15" fill="var(--agent)"/></svg>';
+  const PERSON = '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><circle cx="8" cy="4.8" r="3" fill="currentColor"/><path d="M2.4 15a5.6 5.6 0 0 1 11.2 0z" fill="currentColor"/></svg>';
+
+  const STAGES = [
+    { id: 'A', name: 'Analysis', who: 'Analyst or product owner', people: 1, effort: 1,   a: [0, 0.4, 0.55], color: 'var(--s-a)' },
+    { id: 'D', name: 'Design',   who: 'Architect or tech lead',   people: 1, effort: 1,   a: [0, 0.4, 0.55], color: 'var(--s-d)' },
+    { id: 'B', name: 'Build',    who: 'Developers',               people: 3, effort: 3,   a: [0, 0.6, 0.75], color: 'var(--s-b)' },
+    { id: 'R', name: 'Review',   who: 'Code reviewer',            people: 1, effort: 1,   a: [0, 0.4, 0.55], color: 'var(--s-r)' },
+    { id: 'T', name: 'Test',     who: 'Tester',                   people: 1, effort: 1,   a: [0, 0.5, 0.65], color: 'var(--s-t)' },
+    { id: 'L', name: 'Release',  who: 'Operations',               people: 1, effort: 0.5, color: 'var(--s-l)' }
+  ];
+  const BY = Object.fromEntries(STAGES.map(s => [s.id, s]));
+  const TASKS = {
+    A: [['auto', 'Draft user stories and acceptance criteria'], ['auto', 'Summarise interviews, tickets and user feedback'], ['assist', 'Find gaps, duplicates and conflicts in the backlog'], ['human', 'Decide which problems are worth solving, and in what order'], ['human', 'Agree trade-offs with stakeholders'], ['new', 'Check that agent-written stories reflect what users actually need']],
+    D: [['auto', 'Produce first-draft designs and diagrams'], ['auto', 'Draft interface and data specifications'], ['assist', 'Check designs against standards and reference patterns'], ['human', 'Make architecture decisions and own the trade-offs'], ['human', 'Judge security, privacy and regulatory risk'], ['new', 'Set the constraints and context agents must design within']],
+    B: [['auto', 'Write routine code and boilerplate'], ['auto', 'Write unit tests for new code'], ['assist', 'Refactor code and update dependencies'], ['human', 'Solve novel or complex problems'], ['human', 'Integrate changes and own the health of the codebase'], ['new', 'Break work into well-specified tasks that agents can complete']],
+    R: [['auto', 'Check style, formatting and common defects'], ['auto', 'Summarise what each change does'], ['assist', 'Flag known security weaknesses'], ['human', 'Judge whether a change is correct and maintainable'], ['human', 'Approve changes and remain accountable for them'], ['new', 'Spot code that looks plausible but is wrong']],
+    T: [['auto', 'Generate test cases and test data'], ['auto', 'Run regression tests and sort the failures'], ['assist', 'Maintain automated test scripts'], ['human', 'Explore the product as a user would'], ['human', 'Decide what to test, based on risk'], ['new', 'Check that agent-written tests actually test the requirement']],
+    L: [['auto', 'Write release notes'], ['auto', 'Run the pipeline and check environments'], ['assist', 'Monitor the service and sort first-line alerts'], ['human', 'Make the go or no-go decision'], ['human', 'Lead incidents and talk to customers'], ['new', 'Set limits on what agents may change in production']]
+  };
+
+  const settings = { avail: 6, support: 2, extra: 0.15, plan: 'pull', runFor: 6, pcost: 600, afix: 100, ause: 50, value: 10000, vary: 0.2,
+    gA: 0.4, gD: 0.3, gB: 0.6, gR: 0.4, gT: 0.5, gL: 0.4 };
+  const TEAM = 8;
+  const SCEN = {
+    none:       { name: 'No agents', avail: 6, p: {} },
+    build:      { name: 'Coding agents only', avail: 6, p: { B: 2 } },
+    balanced:   { name: 'Balanced', avail: 6, p: { A: 1, D: 1, B: 2, R: 1, T: 1 } },
+    everywhere: { name: 'Agents everywhere', avail: 18, p: { A: 3, D: 3, B: 3, R: 3, T: 3, L: 3 } }
+  };
+  let scen = 'none';
+  const money = v => v === null || v === undefined || !isFinite(v) ? '–' : '£' + Math.round(v).toLocaleString('en-GB');
+  const agents = { A: 0, D: 0, B: 0, R: 0, T: 0, L: 0 };
+  let selected = 'B', state, timer = null;
+  const runs = [];
+
+  // ---------- capacity formulas ----------
+  // Each agent supports a set number of people. A supported person gets through the stage's productivity gain more work a day.
+  const gainOf = s => settings['g' + s.id];
+  const effortFor = (s, agentBuilt) => ((s.id === 'R' || s.id === 'T') && agentBuilt) ? s.effort * (1 + settings.extra) : s.effort;
+  const supported = s => Math.min(s.people, agents[s.id] * settings.support);
+  const effPeople = s => agents[s.id] ? supported(s) * (1 + gainOf(s)) + (s.people - supported(s)) : s.people;
+  function rates(s) { return { rate: effPeople(s) / effortFor(s, agents.B > 0) }; }
+  function peopleTime(s) { return effortFor(s, agents.B > 0) * s.people / effPeople(s); }
+  const totalPeopleTime = () => STAGES.reduce((t, s) => t + peopleTime(s), 0);
+  function slowest() {
+    let m = null; for (const s of STAGES) { const r = rates(s).rate; if (!m || r < m.r - 1e-9) m = { s, r }; }
+    m.ties = STAGES.filter(s => rates(s).rate <= m.r * 1.02).length;
+    return m;
+  }
+  const placed = () => Object.values(agents).reduce((a, b) => a + b, 0);
+  function expectedCost() {
+    const thr = slowest().r;
+    const usage = STAGES.reduce((t, s) => t + supported(s) * Math.min(1, thr / rates(s).rate), 0) * settings.ause;
+    return (TEAM * settings.pcost + placed() * settings.afix + usage) / thr;
+  }
+  const avg = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
+  const placementText = p => { const parts = STAGES.filter(s => p[s.id]).map(s => `${s.name} ${p[s.id]}`); return parts.length ? parts.join(', ') : 'None'; };
+
+  // ---------- simulation ----------
+  function newState() {
+    return { day: 0, step: 0, dayUse: null, nextId: 1, items: { A: [], D: [], B: [], R: [], T: [], L: [] }, usage: { A: [], D: [], B: [], R: [], T: [], L: [] },
+      sprints: [], waitHist: [], leads: [], finished: false, changed: false, start: { ...agents }, scen: scen ? SCEN[scen].name : null };
+  }
+  // Start every run with the team already working steadily without agents, so sprint 1 is a normal sprint, not an empty pipeline filling up.
+  function warmStart() {
+    const keepAgents = { ...agents }, keepSilent = silent, keepRunFor = settings.runFor;
+    for (const k in agents) agents[k] = 0;
+    silent = true; settings.runFor = 0;
+    for (let i = 0; i < SPRINT; i++) tick();
+    const shift = state.step;
+    for (const s of STAGES) for (const it of state.items[s.id]) { it.start -= shift; it.arrived -= shift; }
+    Object.assign(state, { day: 0, step: 0, dayUse: null, sprints: [], waitHist: [], leads: [], finished: false,
+      usage: { A: [], D: [], B: [], R: [], T: [], L: [] } });
+    Object.assign(agents, keepAgents); silent = keepSilent; settings.runFor = keepRunFor;
+  }
+  function reset() {
+    if (timer) stopTimer();
+    state = newState();
+    warmStart();
+    render();
+  }
+  const current = () => state.sprints[state.sprints.length - 1];
+  function planSprint() {
+    let p;
+    if (settings.plan === 'build') p = Math.round(SPRINT * rates(BY.B).rate);
+    else if (settings.plan === 'constraint') p = Math.round(SPRINT * slowest().r);
+    else { const hist = state.sprints.filter(x => x.closed).slice(-3).map(x => x.done); p = hist.length ? Math.round(avg(hist)) : 10; } // velocity and pull
+    state.sprints.push({ n: state.sprints.length + 1, planned: Math.max(1, p), extra: 0, started: 0, done: 0, closed: false, people: 0, afix: 0, ause: 0 });
+  }
+  // Take on another item beyond the plan only if fewer than two items are waiting in total further down the line.
+  const SPARE_LIMIT = 2;
+  const spareCapacity = () => STAGES.slice(1).reduce((t, s) => t + waitingIn(state.items[s.id]), 0) < SPARE_LIMIT;
+  // Items differ in size. Each item's size is fixed by its number, so every run and every scenario faces the same items.
+  function sizeOf(id) {
+    if (!settings.vary) return 1;
+    let a = (id * 2654435761) >>> 0; const r = () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+    const u = Math.max(r(), 1e-9), v = r(), z = Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v), sg = settings.vary;
+    return Math.min(4, Math.exp(sg * z - sg * sg / 2));
+  }
+  function pull() {
+    const sp = current();
+    if (sp.started >= sp.planned) { if (settings.plan !== 'pull' || !spareCapacity()) return false; sp.extra++; }
+    const id = state.nextId++;
+    state.items.A.push({ id, size: sizeOf(id), start: null, split: false, w: 0, agentBuilt: false, assisted: false, arrived: state.step }); sp.started++; return true;
+  }
+  function split(it, s) {
+    it.w = effortFor(s, it.agentBuilt) * it.size; it.split = true; it.assisted = agents[s.id] > 0;
+    if (s.id === 'A' && it.start === null) it.start = state.step;
+    if (s.id === 'B') it.agentBuilt = agents[s.id] > 0;
+  }
+  // Waiting means unstarted after at least one full quarter-day step in the stage; an item just handed over is not yet waiting.
+  const isWaiting = i => !i.split && i.arrived < state.step;
+  const waitingIn = list => list.filter(isWaiting).length;
+
+  // Each day is worked in quarter-day steps, so a person who finishes early can move on without a whole day being lost.
+  const STEPS = 4, F = 1 / STEPS;
+  function work(s) {
+    const list = state.items[s.id], n = agents[s.id], eff = effPeople(s);
+    const cap = eff * F, perItem = F * eff / s.people;
+    let left = cap, used = 0;
+    const today = new Map();
+    for (let pass = 0; pass < 40 && left > EPS; pass++) {
+      let moved = false;
+      for (const it of list) {
+        if (left <= EPS) break;
+        if (!it.split) split(it, s);
+        const u = Math.min(perItem - (today.get(it) || 0), it.w, left);
+        if (u > EPS) { it.w -= u; left -= u; used += u; today.set(it, (today.get(it) || 0) + u); moved = true; }
+      }
+      if (s.id === 'A' && left > EPS && !list.some(x => !x.split) && pull()) moved = true;
+      if (!moved) break;
+    }
+    const busy = cap > EPS ? used / cap : 0;
+    const du = state.dayUse[s.id];
+    du.h += busy * s.people * F; du.hc += s.people * F;
+    du.g += busy * supported(s) * F; du.gc += n * settings.support * F;
+    // hand finished items to the next stage
+    const done = list.filter(it => it.split && it.w <= EPS);
+    state.items[s.id] = list.filter(it => !done.includes(it));
+    const idx = STAGES.indexOf(s);
+    for (const it of done) {
+      it.split = false; it.w = 0; it.assisted = false; it.arrived = state.step;
+      if (idx < STAGES.length - 1) state.items[STAGES[idx + 1].id].push(it);
+      else { state.leads.push({ day: state.day, lead: (state.step - it.start + 1) / STEPS }); current().done++; }
+    }
+  }
+  function tick() {
+    if (state.finished) return;
+    state.day++;
+    if ((state.day - 1) % SPRINT === 0) planSprint();
+    state.dayUse = Object.fromEntries(STAGES.map(s => [s.id, { h: 0, hc: 0, g: 0, gc: 0 }]));
+    for (let q = 0; q < STEPS; q++) { state.step++; for (let k = STAGES.length - 1; k >= 0; k--) work(STAGES[k]); }
+    for (const s of STAGES) { const u = state.usage[s.id]; u.push(state.dayUse[s.id]); if (u.length > 400) u.shift(); }
+    state.waitHist.push(Object.fromEntries(STAGES.map(s => [s.id, waitingIn(state.items[s.id])])));
+    const sp = current(), gToday = STAGES.reduce((t, s) => { const u = state.usage[s.id]; return t + (u.length ? u[u.length - 1].g : 0); }, 0);
+    sp.people += TEAM * settings.pcost; sp.afix += placed() * settings.afix; sp.ause += gToday * settings.ause;
+    if (state.day % SPRINT === 0) {
+      current().closed = true;
+      if (settings.runFor && state.sprints.length >= settings.runFor) finishRun();
+    }
+  }
+  let silent = false, runNo = 0;
+  const baseCache = {}, setNos = {};
+  const SETKEYS = ['vary', 'support', 'extra', 'gA', 'gD', 'gB', 'gR', 'gT', 'gL', 'pcost', 'afix', 'ause', 'plan'];
+  const settingsKey = () => JSON.stringify(SETKEYS.map(k => settings[k]));
+  function describeSettings(set) {
+    const PLAN = { pull: 'recent velocity plus spare capacity', build: 'what the developers can build', velocity: 'recent velocity only', constraint: 'the slowest stage' };
+    const d = [];
+    if (set.support !== DEFAULTS.support) d.push(`one agent supports ${set.support}`);
+    const gains = STAGES.filter(st => set['g' + st.id] !== DEFAULTS['g' + st.id]).map(st => `${st.name} ${set['g' + st.id] >= 0 ? '+' : ''}${Math.round(set['g' + st.id] * 100)}%`);
+    if (gains.length) d.push('gain ' + gains.join(', '));
+    if (set.extra !== DEFAULTS.extra) d.push(`extra effort on agent code ${Math.round(set.extra * 100)}%`);
+    if (set.pcost !== DEFAULTS.pcost) d.push(`person £${set.pcost} a day`);
+    if (set.afix !== DEFAULTS.afix) d.push(`agent running cost £${set.afix} a day`);
+    if (set.ause !== DEFAULTS.ause) d.push(`agent usage £${set.ause} per person-day supported`);
+    if (set.plan !== DEFAULTS.plan) d.push(`planning on ${PLAN[set.plan]}`);
+    if (set.vary !== DEFAULTS.vary) d.push(`item size variation ${VARY[set.vary] || set.vary}`);
+    return d.length ? d.join('; ') : 'default settings';
+  }
+  function summarise() {
+    const later = state.sprints;
+    const leads = state.leads.map(l => l.lead);
+    let gu = 0, gc = 0; for (const s of STAGES) state.usage[s.id].forEach(x => { gu += x.g; gc += x.gc; });
+    const cost = later.reduce((t, x) => t + x.people + x.afix + x.ause, 0), doneLater = later.reduce((t, x) => t + x.done, 0);
+    const spend = later.length ? later.reduce((t, x) => t + x.afix + x.ause, 0) / later.length : null;
+    return { name: state.scen || 'Own arrangement', placement: placementText(state.start), changed: state.changed, cpi: doneLater ? cost / doneLater : null, spend,
+      total: later.length ? cost / later.length : null, vel: avg(later.map(x => x.done)), lead: avg(leads), people: totalPeopleTime(), busy: gc ? gu / gc : null,
+      waiting: STAGES.reduce((t, s) => t + waitingIn(state.items[s.id]), 0) };
+  }
+  function finishRun() {
+    state.finished = true;
+    if (silent) return;
+    stopTimer();
+    const r = summarise(); r.num = ++runNo;
+    r.key = settingsKey(); r.set = Object.fromEntries(SETKEYS.map(k => [k, settings[k]]));
+    if (!setNos[r.key]) setNos[r.key] = Object.keys(setNos).length + 1;
+    r.setNo = setNos[r.key]; r.setText = describeSettings(r.set);
+    r.base = baseline();
+    runs.push(r);
+    if (runs.length > 16) runs.shift();
+  }
+  // The same project with no agents, run silently under the current settings, as the reference for the business view.
+  function baseline() {
+    const key = settingsKey();
+    if (baseCache[key]) return baseCache[key];
+    const keepAgents = { ...agents }, keepState = state, keepScen = scen, keepRunFor = settings.runFor;
+    for (const k in agents) agents[k] = 0;
+    settings.runFor = 6; silent = true; scen = null;
+    state = newState(); warmStart();
+    while (!state.finished) tick();
+    baseCache[key] = summarise();
+    Object.assign(agents, keepAgents); state = keepState; scen = keepScen; settings.runFor = keepRunFor; silent = false;
+    return baseCache[key];
+  }
+
+  // ---------- rendering ----------
+  function recent(s, days) { const u = state.usage[s.id].slice(-days); if (!u.length) return null; const h = u.reduce((t, x) => t + x.h, 0), hc = u.reduce((t, x) => t + x.hc, 0), g = u.reduce((t, x) => t + x.g, 0), gc = u.reduce((t, x) => t + x.gc, 0); return { h: hc ? h / hc : 0, g: gc ? g / gc : null }; }
+  const pct = v => v === null || v === undefined ? '–' : Math.round(v * 100) + '%';
+  function status(s) {
+    if (state.day < 3) return ['', 'Not started'];
+    const w = waitingIn(state.items[s.id]), r = recent(s, 5), n = agents[s.id];
+    if (w >= 3) return ['pile', `Work piling up: ${w} waiting`];
+    if (r.h < 0.5) return ['idle', 'People waiting for work'];
+    if (n > 0 && n * settings.support > s.people + settings.support - 1) return ['idle', 'More agents than people to support'];
+    return ['flow', 'Flowing'];
+  }
+  function dotsFor(list, s) {
+    const html = { wait: [], active: [] };
+    for (const it of list) {
+      if (isWaiting(it)) html.wait.push('<span class="dot wait"></span>');
+      else if (!it.split) html.active.push('<span class="dot wait"></span>');
+      else html.active.push(`<span class="dot ${it.assisted ? 'assisted' : 'people'}"></span>`);
+    }
+    const cap = a => a.length > 24 ? a.slice(0, 24).join('') + `<span class="more">+${a.length - 24}</span>` : a.join('');
+    return { wait: cap(html.wait), active: cap(html.active), nw: html.wait.length, na: html.active.length };
+  }
+  function renderBoard() {
+    const slow = slowest();
+    $('board').innerHTML = STAGES.map(s => {
+      const n = agents[s.id], r = state.day ? recent(s, 5) : null, [cls, txt] = status(s), d = dotsFor(state.items[s.id], s);
+      const chips = Array.from({ length: n }, () => `<span class="chip" data-from="${s.id}" tabindex="0" role="button" aria-label="Agent in ${s.name}; drag to move">${BOT}</span>`).join('');
+      return `<div class="col${selected === s.id ? ' sel' : ''}" data-col="${s.id}" style="--c:${s.color}" tabindex="0" aria-label="${s.name} stage">
+        <div class="colhead"><b>${s.name}</b><span class="who">${s.who}</span></div>
+        <div class="capline">Can finish about <b>${Math.round(SPRINT * rates(s).rate)}</b> a sprint${slow.s === s && slow.ties === 1 ? '<br><span class="slow">Slowest stage</span>' : ''}</div>
+        <div class="pill ${cls}">${txt}</div>
+        <div class="row"><span class="lbl">People</span>${Array.from({ length: s.people }, () => `<span class="person">${PERSON}</span>`).join('')}<span class="busy">${r ? 'busy ' + pct(r.h) : ''}</span></div>
+        <div class="zone" data-drop="${s.id}">${chips || '<span class="zonehint">Drop agents here</span>'}</div>
+        <div class="row"><span class="lbl">Agents</span><button class="small" data-remove="${s.id}" aria-label="Remove an agent from ${s.name}" ${n ? '' : 'disabled'}>−</button><button class="small" data-add="${s.id}" aria-label="Add an agent to ${s.name}" ${placed() < settings.avail ? '' : 'disabled'}>+</button><span class="busy">${n ? `supports ${+supported(s).toFixed(1)} of ${s.people}` + (r && r.g !== null ? ' · busy ' + pct(r.g) : '') : ''}</span></div>
+        <div class="work"><div class="lbl">Waiting ${d.nw}</div><div class="dots">${d.wait}</div><div class="lbl">In progress ${d.na}</div><div class="dots">${d.active}</div></div>
+      </div>`;
+    }).join('');
+  }
+  function renderTray() {
+    const free = settings.avail - placed();
+    $('tray').innerHTML = free > 0 ? Array.from({ length: free }, () => `<span class="chip" data-from="tray" tabindex="0" role="button" aria-label="Unplaced agent; drag onto a stage">${BOT}</span>`).join('') : '<span class="zonehint">All agents placed. Drag one back here to remove it.</span>';
+    $('traycount').textContent = `${free} of ${settings.avail} not yet placed`;
+  }
+  function renderMetrics() {
+    const closed = state.sprints.filter(x => x.closed), last = closed[closed.length - 1], sp = current(), slow = slowest();
+    $('m-vel').textContent = last ? last.done : '–';
+    $('m-vel-s').textContent = `items; about ${baseline().vel.toFixed(1)} a sprint without agents`;
+    $('m-cap').textContent = Math.round(SPRINT * slow.r);
+    $('m-cap-s').textContent = slow.ties > 1 ? `items a sprint; ${slow.ties} stages are equally limiting` : `items a sprint, limited by ${slow.s.name}`;
+    $('m-sprint').textContent = sp ? `${sp.done} of ${sp.planned}` : '–';
+    $('m-sprint-s').textContent = settings.plan === 'pull' ? (sp && sp.extra ? `finished of planned; ${sp.extra} more taken on because there was spare capacity` : 'finished of planned; more is taken on when there is spare capacity') : { build: 'finished of planned; planned on what developers can build', velocity: 'finished of planned; planned on recent velocity', constraint: 'finished of planned; planned on the slowest stage' }[settings.plan];
+    const ls = state.leads.slice(-10).map(l => l.lead);
+    $('m-lead').textContent = ls.length ? avg(ls).toFixed(1) : '–';
+    $('m-people').textContent = totalPeopleTime().toFixed(1);
+    let gu = 0, gc = 0; for (const s of STAGES) state.usage[s.id].slice(-5).forEach(x => { gu += x.g; gc += x.gc; });
+    $('m-agents').textContent = gc ? pct(gu / gc) : '–';
+    $('m-cpi').textContent = last && last.done ? money((last.people + last.afix + last.ause) / last.done) : '–';
+    $('m-cpi-s').textContent = `${money(TEAM * settings.pcost / 1)} without agents; about ${money(expectedCost())} expected now`;
+    $('m-spend').textContent = last ? money(last.afix + last.ause) : money(placed() * settings.afix * SPRINT);
+    $('m-spend-s').textContent = last ? `${money(last.afix)} running, ${money(last.ause)} usage` : 'running cost only, before any work';
+    $('scenline').textContent = scen ? `Scenario: ${SCEN[scen].name}` : 'Your own arrangement';
+    document.querySelectorAll('[data-preset]').forEach(b => b.classList.toggle('active', b.dataset.preset === scen));
+    const wk = Math.floor((state.day - 1) / SPRINT) + 1, dd = ((state.day - 1) % SPRINT) + 1;
+    $('dayline').textContent = state.day === 0 ? 'Ready. Place agents, then press Play.' : `Sprint ${wk}, day ${dd}` + (state.finished ? ' · run finished and added to the table' : '') + (state.changed && !state.finished ? ' · agents moved during this run' : '');
+    $('play').textContent = timer ? 'Pause' : 'Play';
+  }
+  function renderDetail() {
+    const s = BY[selected], n = agents[s.id], r = state.day ? recent(s, SPRINT) : null, g = gainOf(s);
+    const before = s.effort * ((s.id === 'R' || s.id === 'T') && agents.B > 0 ? 1 + settings.extra : 1), now = peopleTime(s);
+    const tasks = TASKS[s.id];
+    const gtxt = `${g >= 0 ? '+' : ''}${Math.round(g * 100)}%`, gword = `${Math.round(Math.abs(g) * 100)}%`;
+    let html = `<div class="detailhead"><h2><span class="sw" style="background:${s.color}"></span>${s.name}: ${n ? n + (n === 1 ? ' agent' : ' agents') : 'no agents'}</h2><span class="hint" style="margin:0">Click any stage to see its tasks.</span></div>`;
+    if (!n || g <= 0) {
+      html += n ? `<p class="detailnote">The productivity gain for ${s.name} is set to ${gtxt}, so the agents here slow people down rather than take work on. Everything is still done by people, at ${now.toFixed(1)} person-days per item.</p>`
+        : `<p class="detailnote">Everything here is done by people today, at ${before.toFixed(1)} person-days per item. With agent support, people in ${s.name} are set to get through ${gword} more work. Drag an agent in to see which tasks change.</p>`;
+      html += `<div class="buckets"><div class="bucket" style="grid-column:1/-1"><h3>Done by people today</h3><ul>${tasks.filter(t => t[0] !== 'new').map(t => `<li>${t[1]}</li>`).join('')}</ul></div></div>`;
+    } else {
+      const deep = g >= 0.5, sp = supported(s);
+      const spare = r ? Math.max(0, (1 - r.h) * s.people * SPRINT) : null;
+      html += `<p class="detailnote">With agent support people here get through ${gword} more work. The agents support ${+sp.toFixed(1)} of the ${s.people} ${s.people === 1 ? 'person' : 'people'} in ${s.name}` +
+        (n * settings.support > s.people + settings.support - 1 ? ', so at least one agent has no one to support' : sp < s.people ? `, so ${+(s.people - sp).toFixed(1)} still work without agents` : '') +
+        `. People time per item: ${before.toFixed(1)} person-days without agents, ${now.toFixed(1)} now.` +
+        (spare !== null && spare >= 1 ? ` Over the last sprint people here had about ${Math.round(spare)} person-days with nothing to do. That time is best spent on the tasks on the right.` : '') + '</p>';
+      const mostly = [], draft = [], focus = [];
+      for (const [k, t] of tasks) {
+        if (k === 'auto') (deep ? mostly : draft).push(t);
+        else if (k === 'assist') (deep ? draft : focus).push(deep ? t : t + ' (with agent help)');
+        else if (k === 'human') focus.push(t);
+        else focus.push(t + '<span class="new">New</span>');
+      }
+      const list = a => a.length ? `<ul>${a.map(t => `<li>${t}</li>`).join('')}</ul>` : '<p class="hint" style="margin:0">None at this level of gain. At a gain of 50% or more, routine tasks move to agents entirely.</p>';
+      html += `<div class="buckets">
+        <div class="bucket"><h3>${BOT.replace('width="18" height="18"', 'width="14" height="14"').replace(/var\(--agent\)/g, 'var(--bg)')}Mostly done by agents</h3>${list(mostly)}</div>
+        <div class="bucket"><h3>Agent drafts, people check</h3>${list(draft)}</div>
+        <div class="bucket focus"><h3>Where people should focus</h3>${list(focus)}</div>
+      </div>`;
+    }
+    $('detail').innerHTML = html;
+  }
+  function drawVel() {
+    const W = 1200, H = 230, L = 44, R = 130, T = 14, B = 28;
+    const sps = state.sprints, total = Math.max(settings.runFor || 6, sps.length);
+    const maxY = Math.max(15, ...sps.map(x => Math.max(x.planned + (x.extra || 0), x.done))) * 1.12;
+    const y = v => T + (H - T - B) * (1 - v / maxY), bw = (W - L - R) / total;
+    const step = maxY > 30 ? 10 : 5;
+    let out = '';
+    for (let v = 0; v <= maxY; v += step) out += `<line x1="${L}" y1="${y(v)}" x2="${W - R}" y2="${y(v)}" stroke="var(--line)" stroke-width="${v === 0 ? 1.2 : 0.8}"/><text x="${L - 8}" y="${y(v) + 4}" text-anchor="end" font-size="12" fill="var(--muted)">${v}</text>`;
+    for (let i = 0; i < total; i++) out += `<text x="${L + i * bw + bw / 2}" y="${H - 8}" text-anchor="middle" font-size="12" fill="var(--muted)">Sprint ${i + 1}</text>`;
+    sps.forEach((x, i) => {
+      const w = Math.min(90, bw * 0.55), x0 = L + i * bw + (bw - w) / 2;
+      out += `<rect x="${x0}" y="${y(x.planned)}" width="${w}" height="${y(0) - y(x.planned)}" fill="none" stroke="var(--muted)" stroke-dasharray="4 3"/>`;
+      if (x.extra) out += `<rect x="${x0}" y="${y(x.planned + x.extra)}" width="${w}" height="${y(x.planned) - y(x.planned + x.extra)}" fill="none" stroke="var(--good)" stroke-width="1.5" stroke-dasharray="4 3"/>`;
+      out += `<rect x="${x0 + 5}" y="${y(x.done)}" width="${w - 10}" height="${y(0) - y(x.done)}" rx="2" fill="var(--accent)" opacity="${x.closed ? 1 : 0.45}"/>`;
+      if (x.done) { const inside = y(0) - y(x.done) > 26; out += `<text x="${x0 + w / 2}" y="${inside ? y(x.done) + 17 : y(x.done) - 6}" text-anchor="middle" font-size="13" font-weight="600" fill="${inside ? 'var(--accent-ink)' : 'var(--ink)'}">${x.done}</text>`; }
+    });
+    const bv = baseline().vel;
+    out += `<line x1="${L}" y1="${y(bv)}" x2="${W - R}" y2="${y(bv)}" stroke="var(--ink)" stroke-dasharray="7 5" opacity="0.55"/>`;
+    out += `<text x="${W - R + 8}" y="${y(bv) + 4}" font-size="12" fill="var(--muted)">${bv.toFixed(1)} without agents</text>`;
+    $('velchart').innerHTML = out;
+  }
+  function drawWait() {
+    const W = 1200, H = 340, L = 58, R = 170, T = 30, B = 30, raw = state.waitHist;
+    // plotted as a three-day average so the trend is easier to read; labels show today's figure
+    const h = raw.map((d, i) => Object.fromEntries(STAGES.map(s => { const w = raw.slice(Math.max(0, i - 2), i + 1); return [s.id, w.reduce((t, x) => t + x[s.id], 0) / w.length]; })));
+    const days = Math.max((settings.runFor || 6) * SPRINT, h.length);
+    const peak = Math.max(0, ...raw.flatMap(d => STAGES.map(s => d[s.id])));
+    const maxY = Math.max(6, peak) * 1.15;
+    const x = i => L + i * (W - L - R) / Math.max(1, days - 1), y = v => T + (H - T - B) * (1 - v / maxY);
+    let out = '';
+    // sprint bands
+    for (let sp = 0; sp * SPRINT < days; sp++) {
+      const x0 = x(sp * SPRINT), x1 = x(Math.min(days - 1, (sp + 1) * SPRINT - 1)) + (sp * SPRINT + SPRINT < days ? (W - L - R) / (days - 1) : 0);
+      if (sp % 2 === 0) out += `<rect x="${x0}" y="${T}" width="${Math.max(0, x1 - x0)}" height="${H - T - B}" fill="var(--muted)" opacity="0.06"/>`;
+      out += `<text x="${(x0 + x1) / 2}" y="${T - 10}" text-anchor="middle" font-size="12" fill="var(--muted)">Sprint ${sp + 1}</text>`;
+    }
+    const step = maxY > 60 ? 20 : maxY > 30 ? 10 : maxY > 12 ? 5 : 2;
+    for (let v = 0; v <= maxY; v += step) out += `<line x1="${L}" y1="${y(v)}" x2="${W - R}" y2="${y(v)}" stroke="var(--line)" stroke-width="${v === 0 ? 1.2 : 0.8}"/><text x="${L - 8}" y="${y(v) + 4}" text-anchor="end" font-size="12" fill="var(--muted)">${v}</text>`;
+    out += `<text x="16" y="${(T + H - B) / 2}" font-size="12" fill="var(--muted)" transform="rotate(-90 16 ${(T + H - B) / 2})" text-anchor="middle">items waiting</text>`;
+    // lines, drawn quietest first so the stage with most waiting sits on top
+    const last = raw.length ? raw[raw.length - 1] : null, lastAvg = h.length ? h[h.length - 1] : null;
+    const order = [...STAGES].sort((a, b) => (last ? last[a.id] - last[b.id] : 0));
+    const top = last ? order[order.length - 1] : null;
+    for (const s of order) {
+      if (!h.length) break;
+      const pts = h.map((d, i) => `${x(i).toFixed(1)},${y(d[s.id]).toFixed(1)}`).join(' ');
+      const main = top && s === top && last[s.id] >= 2;
+      if (main) out += `<polygon points="${x(0).toFixed(1)},${y(0).toFixed(1)} ${pts} ${x(h.length - 1).toFixed(1)},${y(0).toFixed(1)}" fill="${s.color}" opacity="0.12"/>`;
+      out += `<polyline fill="none" stroke="${s.color}" stroke-width="${main ? 3.5 : 2.2}" stroke-linejoin="round" stroke-linecap="round" points="${pts}"/>`;
+      out += `<circle cx="${x(h.length - 1).toFixed(1)}" cy="${y(lastAvg[s.id]).toFixed(1)}" r="${main ? 4.5 : 3.5}" fill="${s.color}"/>`;
+    }
+    // labels at the right, spaced so they never overlap
+    const labels = STAGES.map(s => ({ s, v: last ? last[s.id] : 0, y: lastAvg ? y(lastAvg[s.id]) : y(0) })).sort((a, b) => a.y - b.y);
+    const gap = 17;
+    for (let i = 1; i < labels.length; i++) labels[i].y = Math.max(labels[i].y, labels[i - 1].y + gap);
+    labels[labels.length - 1].y = Math.min(labels[labels.length - 1].y, H - B);
+    for (let i = labels.length - 2; i >= 0; i--) labels[i].y = Math.min(labels[i].y, labels[i + 1].y - gap);
+    const lx = (last ? x(h.length - 1) : W - R) + 14;
+    for (const l of labels) {
+      out += `<rect x="${lx - 2}" y="${l.y - 6}" width="10" height="10" rx="2" fill="${l.s.color}"/>`;
+      out += `<text x="${lx + 14}" y="${l.y + 3}" font-size="12.5" font-weight="${top && l.s === top && l.v >= 2 ? 600 : 400}" fill="var(--ink)">${l.s.name}${last ? ' ' + l.v : ''}</text>`;
+    }
+    if (!h.length) out += `<text x="${(L + W - R) / 2}" y="${(T + H - B) / 2}" text-anchor="middle" font-size="13" fill="var(--muted)">Press Play to see where work waits.</text>`;
+    else if (peak === 0) out += `<text x="${(L + W - R) / 2}" y="${(T + H - B) / 2}" text-anchor="middle" font-size="13" fill="var(--muted)">Nothing is waiting: every stage keeps up with the one before it.</text>`;
+    $('waitchart').innerHTML = out;
+  }
+  function renderRuns() {
+    const cols = [
+      { v: r => r.vel, f: v => v.toFixed(1), better: 'high' },
+      { v: r => r.vel === null ? null : r.vel / r.base.vel - 1, f: v => (v >= 0 ? '+' : '') + Math.round(v * 100) + '%' },
+      { v: r => r.lead, f: v => v.toFixed(1), better: 'low' },
+      { v: r => r.people, f: v => v.toFixed(1), better: 'low' },
+      { v: r => r.busy, f: v => pct(v), better: 'high' },
+      { v: r => r.waiting, f: v => v, better: 'low' },
+      { v: r => r.cpi, f: money, better: 'low' },
+      { v: r => r.spend, f: money, better: 'low' }
+    ];
+    cols.forEach(c => { if (!c.better) return; const vals = runs.map(c.v).filter(v => v !== null && v !== undefined); c.best = c.worst = undefined; if (vals.length < 2) return; const lo = Math.min(...vals), hi = Math.max(...vals); if (lo === hi) return; c.best = c.better === 'high' ? hi : lo; c.worst = c.better === 'high' ? lo : hi; });
+    $('runs').querySelector('tbody').innerHTML = runs.length ? runs.map(r => `<tr><td><b>Run ${r.num} · ${r.name}</b><br>${r.placement}<br><span class="setlbl">Settings ${r.setNo}: ${r.setText}</span>${r.changed ? '<br><span class="flag">agents moved during the run</span>' : ''}</td>` + cols.map(c => { const v = c.v(r); const cls = v === null || v === undefined ? '' : (v === c.best ? ' best' : v === c.worst ? ' worst' : ''); return `<td class="num${cls}">${v === null || v === undefined ? '–' : c.f(v)}</td>`; }).join('') + '</tr>').join('')
+      : '<tr><td colspan="9" class="hint">No finished runs yet. Choose a run length and press Play.</td></tr>';
+  }
+  function renderBusiness() {
+    $('biz-value').textContent = money(settings.value);
+    $('biz-empty').style.display = runs.length ? 'none' : 'block';
+    if (!runs.length) { $('biz').querySelector('tbody').innerHTML = ''; $('bizchart').setAttribute('viewBox', '0 0 640 10'); $('bizchart').innerHTML = ''; return; }
+    const Q = 6, V = settings.value;
+    const row = (r, b) => {
+      const items = r.vel * Q, spend = r.total * Q, value = items * V, agentQ = (r.spend || 0) * Q;
+      const gain = r === b ? 0 : (value - spend) - (b.vel * Q * V - b.total * Q);
+      return { items, spend, value, agentQ, gain, roi: agentQ > 0 ? gain / agentQ : null };
+    };
+    const chg = (v, base, lowerBetter) => { if (v === null || base === null || !base) return ''; const d = v / base - 1; if (Math.abs(d) < 0.005) return ' <small class="same">(same)</small>'; const good = lowerBetter ? d < 0 : d > 0; return ` <small class="${good ? 'up' : 'down'}">(${d > 0 ? '+' : ''}${Math.round(d * 100)}%)</small>`; };
+    let html = '';
+    const keys = [...new Set(runs.map(r => r.key))];
+    for (const key of keys) {
+      const group = runs.filter(r => r.key === key), b = group[0].base, rb = row(b, b);
+      html += `<tr class="grp"><td colspan="8">Settings ${group[0].setNo}: ${group[0].setText}</td></tr>`;
+      html += `<tr class="ref"><td><b>No agents</b> (reference)</td><td class="num">${rb.items.toFixed(0)}</td><td class="num">${b.lead.toFixed(1)}</td><td class="num">${money(b.cpi)}</td><td class="num">${money(rb.spend)}</td><td class="num">${money(rb.value)}</td><td class="num">–</td><td class="num">–</td></tr>`;
+      for (const r of group) {
+        const x = row(r, b);
+        html += `<tr><td><b>Run ${r.num} · ${r.name}</b>${r.changed ? '<br><span class="flag">agents moved during the run</span>' : ''}</td>
+          <td class="num">${x.items.toFixed(0)}${chg(x.items, rb.items, false)}</td>
+          <td class="num">${r.lead.toFixed(1)}${chg(r.lead, b.lead, true)}</td>
+          <td class="num">${money(r.cpi)}${chg(r.cpi, b.cpi, true)}</td>
+          <td class="num">${money(x.spend)}</td>
+          <td class="num">${money(x.value)}</td>
+          <td class="num ${x.gain > 0.5 ? 'gain' : x.gain < -0.5 ? 'loss' : ''}">${x.gain >= 0 ? '+' : '−'}${money(Math.abs(x.gain))}</td>
+          <td class="num">${x.roi === null ? '–' : x.roi.toFixed(1)}</td></tr>`;
+      }
+    }
+    $('biz').querySelector('tbody').innerHTML = html;
+    // chart: change against no agents, three measures per run
+    const measures = [['More items delivered', r => r.vel / r.base.vel - 1], ['Shorter lead time', r => 1 - r.lead / r.base.lead], ['Lower cost per item', r => 1 - r.cpi / r.base.cpi]];
+    const W = 640, LBL = 170, rowH = 15, gap = 14, top = 8, mid = LBL + (W - LBL) / 2;
+    const vals = runs.flatMap(r => measures.map(m => m[1](r)));
+    const span = Math.max(0.3, ...vals.map(Math.abs)) * 1.15, half = (W - LBL - 20) / 2;
+    const H = top + runs.length * (measures.length * rowH + gap + 14) + 16;
+    let out = `<line x1="${mid}" y1="${top}" x2="${mid}" y2="${H - 16}" stroke="var(--ink)" opacity="0.5"/>`;
+    let y = top;
+    for (const r of runs) {
+      out += `<text x="0" y="${y + 11}" font-size="12" font-weight="600" fill="var(--ink)">Run ${r.num} · ${r.name}${keys.length > 1 ? ` · settings ${r.setNo}` : ''}</text>`;
+      y += 16;
+      for (const [label, f] of measures) {
+        const v = f(r), w = Math.abs(v) / span * half, x0 = v >= 0 ? mid : mid - w;
+        out += `<text x="${LBL - 8}" y="${y + 10}" text-anchor="end" font-size="11" fill="var(--muted)">${label}</text>`;
+        out += `<rect x="${x0.toFixed(1)}" y="${y + 1}" width="${Math.max(1, w).toFixed(1)}" height="${rowH - 4}" rx="2" fill="${v >= 0 ? 'var(--good)' : 'var(--bad)'}"/>`;
+        out += `<text x="${(v >= 0 ? mid + w + 4 : mid - w - 4).toFixed(1)}" y="${y + 10}" text-anchor="${v >= 0 ? 'start' : 'end'}" font-size="11" fill="var(--ink)">${v >= 0 ? '+' : '−'}${Math.round(Math.abs(v) * 100)}%</text>`;
+        y += rowH;
+      }
+      y += gap;
+    }
+    out += `<text x="${mid}" y="${H - 3}" text-anchor="middle" font-size="11" fill="var(--muted)">no change against no agents</text>`;
+    $('bizchart').setAttribute('viewBox', `0 0 ${W} ${H}`);
+    $('bizchart').innerHTML = out;
+  }
+  function render() { renderTray(); renderBoard(); renderMetrics(); renderDetail(); drawVel(); drawWait(); renderRuns(); renderBusiness(); }
+
+  // ---------- controls ----------
+  function stopTimer() { clearInterval(timer); timer = null; $('play').textContent = 'Play'; }
+  function play() {
+    if (timer) { stopTimer(); return; }
+    if (state.finished) reset();
+    const sp = +$('speed').value;
+    if (sp === 0) { const limit = settings.runFor ? settings.runFor * SPRINT : state.day + 10 * SPRINT; while (!state.finished && state.day < limit) tick(); render(); return; }
+    timer = setInterval(() => { tick(); render(); }, sp);
+    $('play').textContent = 'Pause';
+  }
+  $('play').addEventListener('click', play);
+  $('step').addEventListener('click', () => { if (timer) stopTimer(); if (state.finished) reset(); tick(); render(); });
+  $('reset').addEventListener('click', reset);
+  $('speed').addEventListener('change', () => { if (timer) { stopTimer(); play(); } });
+  $('runFor').addEventListener('change', e => { settings.runFor = +e.target.value; reset(); });
+  $('clearruns').addEventListener('click', () => { runs.length = 0; renderRuns(); renderBusiness(); });
+
+  function agentsChanged(stage) { if (state.day > 0 && !state.finished) state.changed = true; scen = null; if (stage) selected = stage; render(); }
+  function move(from, to) {
+    if (from === to) return;
+    if (from === 'tray') { if (!to || to === 'tray' || placed() >= settings.avail) return; agents[to]++; agentsChanged(to); }
+    else { agents[from]--; if (to && to !== 'tray') agents[to]++; agentsChanged(to && to !== 'tray' ? to : from); }
+  }
+  document.addEventListener('click', e => {
+    const add = e.target.closest('[data-add]'), rem = e.target.closest('[data-remove]');
+    if (add) { if (placed() < settings.avail) { agents[add.dataset.add]++; agentsChanged(add.dataset.add); } return; }
+    if (rem) { if (agents[rem.dataset.remove] > 0) { agents[rem.dataset.remove]--; agentsChanged(rem.dataset.remove); } return; }
+    const col = e.target.closest('[data-col]');
+    if (col && !e.target.closest('.chip')) { selected = col.dataset.col; renderBoard(); renderDetail(); }
+    const pre = e.target.closest('[data-preset]');
+    if (pre) {
+      const sc = SCEN[pre.dataset.preset];
+      settings.avail = Math.max(sc.avail, 6); showSettings();
+      for (const k in agents) agents[k] = sc.p[k] || 0;
+      scen = pre.dataset.preset;
+      selected = { build: 'B', balanced: 'R', everywhere: 'T' }[scen] || selected;
+      reset();
+    }
+  });
+  document.addEventListener('keydown', e => {
+    const col = e.target.closest && e.target.closest('[data-col]');
+    if (col && (e.key === 'Enter' || e.key === ' ') && e.target === col) { e.preventDefault(); selected = col.dataset.col; renderBoard(); renderDetail(); }
+  });
+
+  // drag and drop with pointer events, so it works with mouse, pen and touch
+  let drag = null;
+  document.addEventListener('pointerdown', e => {
+    const chip = e.target.closest('.chip[data-from]');
+    if (!chip || e.button > 0) return;
+    e.preventDefault();
+    const ghost = document.createElement('span'); ghost.className = 'chip ghost'; ghost.innerHTML = BOT;
+    ghost.style.left = e.clientX + 'px'; ghost.style.top = e.clientY + 'px';
+    document.body.appendChild(ghost);
+    drag = { from: chip.dataset.from, ghost, over: null };
+  });
+  window.addEventListener('pointermove', e => {
+    if (!drag) return;
+    drag.ghost.style.left = e.clientX + 'px'; drag.ghost.style.top = e.clientY + 'px';
+    const el = document.elementFromPoint(e.clientX, e.clientY), zone = el && el.closest('[data-drop]');
+    if (drag.over && drag.over !== zone) drag.over.classList.remove('over');
+    if (zone) zone.classList.add('over');
+    drag.over = zone;
+  });
+  function endDrag(e) {
+    if (!drag) return;
+    const el = e.type === 'pointerup' ? document.elementFromPoint(e.clientX, e.clientY) : null;
+    const zone = el && el.closest('[data-drop]'), col = el && el.closest('[data-col]');
+    drag.ghost.remove(); if (drag.over) drag.over.classList.remove('over');
+    const from = drag.from; drag = null;
+    const to = zone ? zone.dataset.drop : (col ? col.dataset.col : null);
+    move(from, to);
+  }
+  window.addEventListener('pointerup', endDrag);
+  window.addEventListener('pointercancel', endDrag);
+
+  function settingsChanged() { reset(); }
+  const pctv = v => `${v >= 0 ? '+' : ''}${Math.round(v * 100)}%`;
+  const FMT = {
+    's-avail': v => `${v}`, 's-support': v => `${v} ${v === 1 ? 'person' : 'people'}`, 's-extra': v => `${Math.round(v * 100)}%`,
+    's-gA': pctv, 's-gD': pctv, 's-gB': pctv, 's-gR': pctv, 's-gT': pctv, 's-gL': pctv,
+    's-pcost': v => `£${v} a day`, 's-afix': v => `£${v} a day`, 's-ause': v => `£${v} per person-day supported`, 's-value': v => money(v)
+  };
+  const KEY = { 's-avail': 'avail', 's-support': 'support', 's-extra': 'extra', 's-gA': 'gA', 's-gD': 'gD', 's-gB': 'gB', 's-gR': 'gR', 's-gT': 'gT', 's-gL': 'gL',
+    's-pcost': 'pcost', 's-afix': 'afix', 's-ause': 'ause', 's-value': 'value' };
+  const VARY = { 0: 'none', 0.2: 'low', 0.4: 'medium', 0.7: 'high' };
+  const DEFAULTS = { avail: 6, support: 2, extra: 0.15, gA: 0.4, gD: 0.3, gB: 0.6, gR: 0.4, gT: 0.5, gL: 0.4, pcost: 600, afix: 100, ause: 50, value: 10000, vary: 0.2, plan: 'pull' };
+  const trim = () => { while (placed() > settings.avail) { const k = STAGES.map(s => s.id).reverse().find(x => agents[x] > 0); agents[k]--; scen = null; } };
+  function showSettings() { for (const id in KEY) { $(id).value = settings[KEY[id]]; $(id + '-v').textContent = FMT[id](settings[KEY[id]]); } $('s-plan').value = settings.plan; $('s-vary').value = String(settings.vary); }
+  for (const id in KEY) {
+    $(id).addEventListener('input', e => { $(id + '-v').textContent = FMT[id](+e.target.value); });
+    $(id).addEventListener('change', e => { settings[KEY[id]] = +e.target.value; if (id === 's-value') { renderBusiness(); return; } if (id === 's-avail') trim(); settingsChanged(); });
+  }
+  $('s-plan').addEventListener('change', e => { settings.plan = e.target.value; settingsChanged(); });
+  $('s-vary').addEventListener('change', e => { settings.vary = +e.target.value; settingsChanged(); });
+  $('s-defaults').addEventListener('click', () => { Object.assign(settings, DEFAULTS); trim(); showSettings(); settingsChanged(); });
+  showSettings();
+
+  reset();
+})();
+</script>
+</body>
+</html>
